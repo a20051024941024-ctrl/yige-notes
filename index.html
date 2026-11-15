@@ -257,13 +257,25 @@ input,textarea,select{font:inherit;color:inherit}
 .wlink{color:var(--blue);font-size:15px;padding:10px 4px;display:block;margin:6px auto 0}
 .lrow2 .wlink{margin:0}
 
+/* 順序 */
+.nb{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 5px;border-radius:6px;background:var(--c, var(--blue));color:#fff;font-size:12px;font-weight:700;margin-right:7px;vertical-align:2px;line-height:1}
+.row.done .nb{display:none}
+.ordbtns{display:flex;gap:8px;flex:none;margin-top:-4px}
+.ordbtns button{width:40px;height:34px;border-radius:10px;background:var(--fill);color:var(--blue);display:grid;place-items:center}
+.ordbtns button svg{width:18px;height:18px}
+.ordbtns button:disabled{opacity:.25}
+.ordbtns button:active{background:var(--fill2)}
+.row.ordering .circle{opacity:.4}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px 12px 0 0;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:calc(var(--vvh, 100dvh) - var(--sat) / var(--z, 1) - 12px);display:flex;flex-direction:column}
 .sheet.show{transform:none}
+.sheet:not(.show){visibility:hidden;transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility 0s .32s}
 .sheet{bottom:var(--kb, 0px)}
 body.kb-open .toolbar,body.typing .toolbar{display:none}
+body.kb-open .view{padding-bottom:70vh}
 body.kb-open .toast{bottom:calc(var(--kb, 0px) + 12px)}
 body.kb-open .sheet .bigic{display:none}
 body.kb-open .sheet{border-radius:12px}
@@ -477,16 +489,24 @@ if (typeof module !== 'undefined') module.exports = Splitter;
     root.style.setProperty('--vvh', (vv.height / z) + 'px');
     const open = hidden > 120 || (screen.height && vv.height < screen.height * 0.62 && matchMedia('(pointer: coarse)').matches);
     document.body && document.body.classList.toggle('kb-open', !!open);
-    // 正在輸入的地方被擋住時，捲到看得到的位置
-    const a = document.activeElement;
-    if (open && a && /^(INPUT|TEXTAREA)$/.test(a.tagName)){
-      setTimeout(() => { const r = a.getBoundingClientRect(); if (r.bottom > vv.height - 8 || r.top < 0) a.scrollIntoView({ block: 'nearest' }); }, 60);
-    }
+    if (open) setTimeout(alignAboveKeyboard, 80);
   }
   vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd);
-  addEventListener('focusin', () => setTimeout(upd, 300));
+  addEventListener('focusin', () => setTimeout(() => { upd(); alignAboveKeyboard(); }, 320));
   upd();
 })();
+/* 鍵盤打開時，把正在打字的那一格放在鍵盤正上方（每次都停在同一個位置） */
+function alignAboveKeyboard(){
+  if (!document.body.classList.contains('kb-open')) return;
+  const a = document.activeElement;
+  if (!a || !a.matches || !a.matches('textarea[data-edit]')) return;
+  const row = a.closest('.row'); if (!row) return;
+  const vh = window.visualViewport ? visualViewport.height : innerHeight;
+  const r = row.getBoundingClientRect();
+  let delta = r.bottom - (vh - 10);                 // 這一格的底部貼齊鍵盤上緣
+  if (r.height > vh - 90) delta = r.top - 64;      // 太高放不下時，改成頂部對齊
+  if (Math.abs(delta) > 2) scrollBy(0, delta);
+}
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
@@ -667,6 +687,7 @@ let route = { name: 'home' };
 let query = '';
 let edit = null;            // { id } 或 { ghost:{afterId, ctx} }，再加 value / notes / field / caret
 let selectMode = null;      // 選取模式：Set(ids)
+let orderMode = false;      // 調整順序模式
 let dragging = false, swiping = false, rendering = false;
 let pendingRemote = null;
 const recentDone = new Map();
@@ -886,7 +907,7 @@ const fb = (() => {
   const synced = new Map();        // 'l:'+id / 'i:'+id → { path, j }
   let myName = (() => { try { return localStorage.getItem('yige-name') || ''; } catch { return ''; } })();
   const loggedIn = () => !!(user && !user.isAnonymous);
-  const stripL = d => stable({ name: d.name || '', color: d.color || 'blue', icon: d.icon || 'list', sections: d.sections || [] });
+  const stripL = d => stable({ name: d.name || '', color: d.color || 'blue', icon: d.icon || 'list', sections: d.sections || [], numbered: !!d.numbered });
   const stripI = d => { const { u, by, notified, pending, ...rest } = d; return stable(rest); };
   const itemData = it => { const d = clone(it); delete d.notified; delete d.u; delete d.by; return d; };
   const D = path => F.doc(db, ...path.split('/'));
@@ -961,7 +982,7 @@ const fb = (() => {
       synced.set(key, { path, j });
       if (coll === 'lists'){
         let l = listById(id); if (!l){ l = { id }; state.lists.push(l); }
-        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', sections: Array.isArray(d.sections) ? d.sections : [], pos: d.pos ?? 0 });
+        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', numbered: !!d.numbered, sections: Array.isArray(d.sections) ? d.sections : [], pos: d.pos ?? 0 });
         delete l.shared;
       } else {
         const it = clone(d); it.id = id;
@@ -1014,7 +1035,7 @@ const fb = (() => {
       const sv = synced.get(key);
       if (l.pending || (!snap.metadata.hasPendingWrites && !(sv && sv.j === j))){
         synced.set(key, { path, j });
-        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', sections: Array.isArray(d.sections) ? d.sections : [], shared: true });
+        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', numbered: !!d.numbered, sections: Array.isArray(d.sections) ? d.sections : [], shared: true });
         delete l.pending;
       }
       if (me && myName && l.members[me] !== myName) F.setDoc(listRef(lid), { members: { [me]: myName } }, { merge: true }).catch(onWriteErr);
@@ -1097,7 +1118,7 @@ const fb = (() => {
       if (sv && sv.path !== path) F.deleteDoc(D(sv.path)).catch(onWriteErr);
       if (!sv || sv.path !== path || sv.j !== j){
         synced.set(k, { path, j });
-        const d = { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], u: now, by: me };
+        const d = { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], numbered: !!l.numbered, u: now, by: me };
         if (l.shared){ if (myName) d.members = { [me]: myName }; F.setDoc(D(path), d, { merge: true }).catch(onWriteErr); }
         else { d.pos = i; l.pos = i; F.setDoc(D(path), d).catch(onWriteErr); }
       }
@@ -1368,8 +1389,10 @@ function viewModel(){
     (l.sections || []).forEach(s => secs.push({ secId: s.id, sec: s, title: s.name, collapsed: !!s.collapsed,
       items: vis.filter(i => i.sectionId === s.id), openCount: all.filter(i => i.sectionId === s.id && !i.done).length,
       ctx: { listId: l.id, sectionId: s.id } }));
-    return { title: l.name, color: colorOf(l), canAdd: true, sortable: true, list: l, sectioned: (l.sections || []).length > 0,
-      doneScope: all.filter(i => i.done), sections: secs };
+    const numbers = new Map();
+    if (l.numbered || orderMode) secs.forEach(sc => { let n = 0; sc.items.forEach(i => { if (!i.done) numbers.set(i.id, ++n); }); });
+    return { title: l.name, color: colorOf(l), canAdd: !orderMode, sortable: true, list: l, sectioned: (l.sections || []).length > 0,
+      doneScope: all.filter(i => i.done), sections: secs, numbers };
   }
   if (route.name === 'search'){
     const q = query.trim().toLowerCase();
@@ -1625,6 +1648,7 @@ function render(){
         const c = Math.min(edit.caret ?? ta.value.length, ta.value.length);
         try { ta.setSelectionRange(c, c); } catch {}
         app.querySelectorAll('textarea[data-edit]').forEach(autoGrow);
+        if (document.body.classList.contains('kb-open')){ setTimeout(alignAboveKeyboard, 0); }
         const r = ta.getBoundingClientRect();
         const vh = window.visualViewport ? visualViewport.height : innerHeight;
         if (r.top > vh - 40 || r.bottom < 60) ta.scrollIntoView({ block: 'nearest' });
@@ -1732,7 +1756,11 @@ function renderList(){
   const vm = viewModel();
   const v = h('div', { class: 'view' });
   const allVisible = vm.sections.flatMap(s => s.collapsed ? [] : s.items);
-  const nav = selectMode
+  const nav = orderMode
+    ? h('div', { class: 'lnav' }, h('span'),
+        h('span', { class: 'ttl', style: { opacity: 1 } }, '調整順序'),
+        h('button', { class: 'navbtn', style: { fontWeight: 600 }, onclick: () => { orderMode = false; render(); } }, '完成'))
+    : selectMode
     ? h('div', { class: 'lnav' },
         h('button', { class: 'navbtn', onclick: () => { if (selectMode.size < allVisible.length) allVisible.forEach(i => selectMode.add(i.id)); else selectMode.clear(); render(); } }, selectMode.size && selectMode.size >= allVisible.length ? '全不選' : '全選'),
         h('span', { class: 'ttl', style: { opacity: 1 } }, selectMode.size ? `已選取 ${selectMode.size} 項` : '選取提醒事項'),
@@ -1978,6 +2006,23 @@ function rowMeta(it, vm, isEditing){
   parts.forEach((p, i) => { if (i && !(p.firstChild && p.firstChild.nodeName === 'svg')) meta.append(h('span', {}, '·')); meta.append(p); });
   return parts.length ? meta : null;
 }
+/* 同一個分類裡、還沒完成的項目，照順序排 */
+function orderSiblings(it){
+  const l = listById(it.listId);
+  const sid = secOf(l, it.sectionId) ? it.sectionId : null;
+  return listItems(it.listId).filter(x => !x.done && (secOf(l, x.sectionId) ? x.sectionId : null) === sid).map(x => x.id);
+}
+function moveOrder(id, dir){
+  const it = itemById(id); if (!it) return;
+  const sib = orderSiblings(it), k = sib.indexOf(id), other = sib[k + dir];
+  if (!other) return;
+  const all = listItems(it.listId);
+  const a = all.findIndex(x => x.id === id), b = all.findIndex(x => x.id === other);
+  [all[a], all[b]] = [all[b], all[a]];
+  all.forEach((x, i) => { x.order = i; });
+  save(); renderAnchored(id);
+  try { navigator.vibrate && navigator.vibrate(6); } catch {}
+}
 function renderRow(it, vm){
   const l = listById(it.listId);
   const c = colorOf(l);
@@ -1985,6 +2030,19 @@ function renderRow(it, vm){
   const li = h('li', { class: 'row' + (it.done ? ' done' : '') + (it.flagged && !it.done ? ' flagged' : '') + (isEditing ? ' editing' : '') + (selectMode ? ' selecting' : ''), 'data-id': it.id });
   li.style.setProperty('--c', c);
 
+  const num = vm.numbers && vm.numbers.get(it.id);
+  if (orderMode){
+    const t = h('div', { class: 'title' });
+    if (num) t.append(h('span', { class: 'nb' }, String(num)));
+    t.append(withHighlights(it.title));
+    const sib = orderSiblings(it);
+    const k = sib.indexOf(it.id);
+    const up = h('button', { 'aria-label': '往前', disabled: k <= 0, html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 15 6-6 6 6"/></svg>', onclick: () => moveOrder(it.id, -1) });
+    const dn = h('button', { 'aria-label': '往後', disabled: k < 0 || k >= sib.length - 1, html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>', onclick: () => moveOrder(it.id, 1) });
+    li.classList.add('ordering');
+    li.append(h('div', { class: 'fg' }, h('span', { class: 'circle' }), h('div', { class: 'rbody' }, h('div', { class: 'rtext' }, t), it.done ? null : h('div', { class: 'ordbtns' }, up, dn))));
+    return li;
+  }
   if (selectMode){
     const on = selectMode.has(it.id);
     const circle = h('span', { class: 'circle' + (on ? ' sel' : ''), html: '<i></i>' + `<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4 4 9-9"/></svg>` });
@@ -2016,6 +2074,7 @@ function renderRow(it, vm){
     txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
   } else {
     const t = h('div', { class: 'title' });
+    if (num) t.append(h('span', { class: 'nb' }, String(num)));
     if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
     t.append(withHighlights(it.title));
     txt.append(t);
@@ -2140,6 +2199,10 @@ function renderToolbar(){
       h('button', { class: 'addlist', onclick: () => openListEditor(null) }, '新增列表'));
     return;
   }
+  if (orderMode){
+    box.append(h('div', { class: 'selbar' }, h('span', {}, '按 ↑ ↓ 調整順序，完成後按右上角「完成」')));
+    return;
+  }
   if (selectMode){
     const ids = [...selectMode].filter(id => itemById(id));
     const n = ids.length;
@@ -2164,11 +2227,11 @@ function renderToolbar(){
 function go(r){
   if (edit) commitEdit({ render: false });
   if (route.name === 'home') render.homeY = scrollY;
-  route = r; selectMode = null; closeSwipes(); render(); scrollTo(0, 0);
+  route = r; selectMode = null; orderMode = false; closeSwipes(); render(); scrollTo(0, 0);
 }
 function goHome(){
   if (edit) commitEdit({ render: false });
-  route = { name: 'home' }; selectMode = null; render(); scrollTo(0, render.homeY || 0);
+  route = { name: 'home' }; selectMode = null; orderMode = false; render(); scrollTo(0, render.homeY || 0);
 }
 
 /* =====================================================================
@@ -2186,7 +2249,7 @@ document.addEventListener('pointerdown', e => { if (!e.target.closest('.row.open
 
 function bindGestures(li, fg, it, vm, isEditing){
   fg.addEventListener('pointerdown', e => {
-    if (isEditing || selectMode || (e.button !== undefined && e.button > 0)) return;
+    if (isEditing || selectMode || orderMode || (e.button !== undefined && e.button > 0)) return;
     if (e.target.closest('textarea,.circle,.infobtn,.chip')) return;
     const sx = e.clientX, sy = e.clientY, pid = e.pointerId;
     const base = li.classList.contains('open') ? -ACTW : 0;
@@ -2638,7 +2701,13 @@ function openListMenu(vm){
   const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
   const later = fn => () => setTimeout(fn, 330);
   const allVisible = vm.sections.flatMap(s => s.items);
-  if (allVisible.length) items.push(I(UI.select, '選取提醒事項', () => { selectMode = new Set(); render(); }));
+  if (route.name === 'list' && allVisible.length){
+    const L = listById(route.id);
+    items.push(I('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M3.5 5.5h1v2M3.5 7.5h1.5M3.2 11.3c.6-.6 1.8-.3 1.6.6-.1.5-1.6 1.6-1.6 1.6h1.8M3.3 16.4c.5-.4 1.7-.3 1.6.5 0 .4-.5.6-.9.6.5 0 1 .3.9.8-.1.7-1.3.8-1.7.3"/></svg>',
+      L.numbered ? '隱藏順序編號' : '顯示順序編號 1、2、3', () => { L.numbered = !L.numbered; commit(); }));
+    items.push(I('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 4-3 3 3 3M4 7h11M17 20l3-3-3-3M20 17H9"/></svg>', '調整順序（↑↓）', () => { orderMode = true; selectMode = null; render(); }));
+  }
+  if (allVisible.length) items.push(I(UI.select, '選取提醒事項', () => { selectMode = new Set(); orderMode = false; render(); }));
   if (route.name === 'list') items.push(I(UI.section, '新增分類', later(() => openSectionName(listById(route.id), null))));
   if (allVisible.length) items.push(I(UI.copy, '複製整個列表的文字', () => copyItems(allVisible.map(i => i.id), true)));
   if (route.name === 'list') items.push(I(UI.pencil, '列表資訊', later(() => openListEditor(route.id))));
