@@ -192,7 +192,8 @@ input,textarea,select{font:inherit;color:inherit}
 .avs img:first-child{margin-left:0}
 .byw{display:inline-flex;align-items:center;gap:4px}
 .asg{color:var(--label2)}
-.lrow .lshared{font-size:14px;flex:none}
+.lrow .lshared{font-size:13px;flex:none;color:var(--label2);background:var(--fill);border-radius:10px;padding:1px 8px}
+.lrow .lshared:empty{display:none}
 .asg.me{color:var(--green);font-weight:600}
 .byw img{width:14px;height:14px;border-radius:50%;object-fit:cover}
 
@@ -210,6 +211,26 @@ input,textarea,select{font:inherit;color:inherit}
 .tips span{flex:1;line-height:1.4}
 .tips button{color:var(--blue);font-weight:600;font-size:14px;padding:6px 8px;flex:none}
 .pastehint{background:var(--card);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:15px;color:var(--blue);font-weight:600}
+
+/* 分段按鈕 */
+.seg{display:flex;gap:4px;background:var(--fill);padding:3px;border-radius:10px}
+.seg button{flex:1;height:34px;border-radius:8px;font-size:15px;color:var(--label2)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--label);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* 分類圖案 */
+.sectiles{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0 4px}
+.stile{background:var(--bg);border-radius:14px;padding:12px 4px 10px;display:flex;flex-direction:column;align-items:center;gap:3px;border:2px solid transparent;min-width:0;transition:transform .1s}
+.stile:active{transform:scale(.96)}
+.stile.on{border-color:var(--c, var(--blue));background:var(--card);box-shadow:0 2px 10px rgba(0,0,0,.08)}
+.stile .em{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:26px;background:var(--card);margin-bottom:2px}
+.stile.on .em{background:var(--bg)}
+.stile .nm{font-size:14px;font-weight:600;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px}
+.stile .ct{font-size:12px;color:var(--label2)}
+.stile.add .em{background:transparent;border:1.6px dashed var(--ring);color:var(--label2);font-size:22px}
+.stile.add .nm{color:var(--label2);font-weight:500}
+.emgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;padding:12px}
+.emb{aspect-ratio:1;border-radius:12px;font-size:26px;display:grid;place-items:center}
+.emb.on{background:var(--fill2)}
+.emb:active{background:var(--fill)}
 
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
@@ -1452,15 +1473,20 @@ function fillHome(main){
   }
   if (t.children.length % 2 === 1 && t.children.length > 1) t.lastChild.style.gridColumn = '1 / 3';
   if (t.children.length) v.append(t);
-  v.append(h('div', { class: 'sechd' }, '我的列表'));
+  const anyShared = !IN_CLAUDE && state.lists.some(l => l.shared);
+  const groups = anyShared ? [['👤 我自己的', state.lists.filter(l => !l.shared)], ['👥 多人一起的', state.lists.filter(l => l.shared)]] : [['我的列表', state.lists]];
+  groups.forEach(([title, lists]) => {
+  if (!lists.length) return;
+  v.append(h('div', { class: 'sechd' }, title));
   const g = h('ul', { class: 'group' });
-  state.lists.forEach(l => {
+  lists.forEach(l => {
     const n = state.items.filter(i => i.listId === l.id && !i.done).length;
     g.append(h('li', {}, h('button', { class: 'lrow', onclick: () => go({ name: 'list', id: l.id }) },
       h('span', { class: 'lic', style: { background: colorOf(l) }, html: ICONS[l.icon] || ICONS.list }),
-      h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), l.shared ? h('span', { class: 'lshared', title: '共用中' }, '👥') : null, h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
+      h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), l.shared ? h('span', { class: 'lshared' }, Object.keys(l.members || {}).length ? `${Object.keys(l.members).length} 人` : '') : null, h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
   });
   v.append(g);
+  });
 
 }
 
@@ -1550,11 +1576,45 @@ function renderList(){
   requestAnimationFrame(() => onScroll());
   return v;
 }
+const SEC_EMOJI = [[/釣|魚|漁/, '🎣'], [/船/, '⛵'], [/工作|公司|上班|客戶|會議/, '💼'], [/購物|買|採買|超市/, '🛒'], [/學|讀書|課|考/, '📚'], [/遊戲|game/i, '🎮'],
+  [/開發|程式|code|bug/i, '💻'], [/設計|美術|畫|圖/, '🎨'], [/建築|房|屋|民宅/, '🏠'], [/生活|家事|打掃/, '🧺'], [/旅|出國|機票/, '✈️'], [/運動|健身|跑/, '🏃'],
+  [/吃|餐|食|料理/, '🍜'], [/錢|帳|繳|費/, '💰'], [/健康|醫|藥/, '💊'], [/禮物|生日/, '🎁'], [/音樂|歌/, '🎵'], [/影片|拍|剪/, '🎬'], [/重要|急/, '⭐'], [/待辦|今天|todo/i, '📝']];
+const secEmoji = sec => sec.icon || (SEC_EMOJI.find(([re]) => re.test(sec.name)) || [, ''])[1];
+const secView = (() => { try { return JSON.parse(localStorage.getItem('yige-secview')) || {}; } catch { return {}; } })();
+function setSecView(lid, v){ secView[lid] = v; try { localStorage.setItem('yige-secview', JSON.stringify(secView)); } catch {} }
+function currentSec(l){
+  const v = secView[l.id];
+  if (!v || v === 'all') return 'all';
+  if (v === 'none') return 'none';
+  return l.sections.some(x => x.id === v) ? v : 'all';
+}
+function secTiles(vm){
+  const l = vm.list, cur = currentSec(l);
+  const all = listItems(l.id).filter(i => !i.done);
+  const box = h('div', { class: 'sectiles' });
+  const tile = (key, em, name, n, onclick, extra = '') => h('button', { class: 'stile' + (cur === key ? ' on' : '') + extra, onclick, 'aria-pressed': cur === key },
+    h('span', { class: 'em', style: em ? {} : { background: colorOf(l), color: '#fff', fontWeight: 700, fontSize: '18px' } }, em || name.slice(0, 1)),
+    h('span', { class: 'nm' }, name), n == null ? null : h('span', { class: 'ct' }, n ? `${n} 項` : '沒有'));
+  const pick = key => () => { if (edit) commitEdit({ render: false }); setSecView(l.id, key); render(); scrollTo(0, 0); };
+  box.append(tile('all', '📋', '全部', all.length, pick('all')));
+  const none = all.filter(i => !secOf(l, i.sectionId)).length;
+  if (none) box.append(tile('none', '📄', '未分類', none, pick('none')));
+  l.sections.forEach(sec => {
+    const em = secEmoji(sec);
+    box.append(tile(sec.id, em, sec.name, all.filter(i => i.sectionId === sec.id).length, pick(sec.id)));
+  });
+  box.append(tile('__add', '＋', '新增分類', null, () => openSectionName(l, null), ' add'));
+  return box;
+}
 function renderSectioned(v, vm){
   const l = vm.list;
+  const showTiles = l.sections.length >= 2;
+  const cur = showTiles ? currentSec(l) : 'all';
+  if (showTiles && !selectMode) v.append(secTiles(vm));
   const ul = h('ul', { class: 'rows' });
   let placed = false;
   vm.sections.forEach(s => {
+    if (cur !== 'all' && (cur === 'none' ? s.secId !== null : s.secId !== cur)) return;
     if (s.secId) ul.append(sectionHeader(s, l));
     if (s.collapsed) return;
     s.items.forEach(it => {
@@ -1587,7 +1647,9 @@ function sectionHeader(s, l){
 function addAtEnd(vm){
   vm = vm || viewModel();
   if (!vm.canAdd) return;
-  if (route.name === 'list'){ const s = vm.sections[vm.sections.length - 1]; const its = s.items; startGhost(its.length && !s.collapsed ? its[its.length - 1].id : null, s.ctx); return; }
+  if (route.name === 'list'){
+    const cur = vm.list && vm.list.sections.length >= 2 ? currentSec(vm.list) : 'all';
+    const s = cur === 'all' ? vm.sections[vm.sections.length - 1] : (vm.sections.find(x => cur === 'none' ? x.secId === null : x.secId === cur) || vm.sections[vm.sections.length - 1]); const its = s.items; startGhost(its.length && !s.collapsed ? its[its.length - 1].id : null, s.ctx); return; }
   if (route.name === 'smart' && route.key === 'all'){ const s = vm.sections[0]; startGhost(s.items.length ? s.items[s.items.length - 1].id : null, s.ctx); return; }
   if (route.name === 'smart' && route.key === 'today'){
     if (edit) commitEdit({ render: false });
@@ -2150,7 +2212,10 @@ function openNew(ctx, pasteHint){
 /* ---------- 列表設定 ---------- */
 function openListEditor(id){
   const l = id ? listById(id) : null;
-  const w = l ? { name: l.name, color: l.color, icon: l.icon } : { name: '', color: COLOR_KEYS[[5, 0, 1, 3, 8, 9, 2, 6, 7, 4, 10, 11][state.lists.length % 12]], icon: 'list' };
+  const w = l ? { name: l.name, color: l.color, icon: l.icon } : { name: '', color: COLOR_KEYS[[5, 0, 1, 3, 8, 9, 2, 6, 7, 4, 10, 11][state.lists.length % 12]], icon: 'list', multi: false };
+  const who = (!l && fb.configured) ? h('div', { class: 'seg', style: { margin: '14px 0 0' } },
+    h('button', { 'aria-pressed': 'true', onclick: e => { w.multi = false; who.children[0].setAttribute('aria-pressed', 'true'); who.children[1].setAttribute('aria-pressed', 'false'); } }, '👤 自己用'),
+    h('button', { 'aria-pressed': 'false', onclick: e => { w.multi = true; who.children[1].setAttribute('aria-pressed', 'true'); who.children[0].setAttribute('aria-pressed', 'false'); } }, '👥 多人一起')) : null;
   const big = h('div', { class: 'bigic' });
   const name = h('input', { class: 'lname-in', placeholder: '列表名稱', maxlength: 40, 'aria-label': '列表名稱', enterkeyhint: 'done' });
   name.value = w.name;
@@ -2165,11 +2230,15 @@ function openListEditor(id){
   ICON_KEYS.forEach(k => ic.append(h('button', { class: 'icn', 'data-i': k, 'aria-label': '圖示 ' + k, html: ICONS[k], onclick: () => { w.icon = k; paint(); } })));
   name.addEventListener('input', () => { w.name = name.value; paint(); });
   name.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter'){ e.preventDefault(); $('#sheetR').click(); } });
-  const body = h('div', {}, h('div', { class: 'fgroup', style: { padding: '8px 16px 18px' } }, big, name), h('div', { class: 'fgroup' }, sw), h('div', { class: 'fgroup' }, ic));
+  const body = h('div', {}, h('div', { class: 'fgroup', style: { padding: '8px 16px 18px' } }, big, name, who), h('div', { class: 'fgroup' }, sw), h('div', { class: 'fgroup' }, ic));
   openSheet({ title: l ? '列表資訊' : '新增列表', body, rightDisabled: !w.name.trim(), onRight: () => {
     if (!w.name.trim()) return false;
     if (l){ Object.assign(l, { name: w.name.trim(), color: w.color, icon: w.icon }); commit(); }
-    else { const nl = { id: uid(), name: w.name.trim(), color: w.color, icon: w.icon }; state.lists.push(nl); route = { name: 'list', id: nl.id }; commit(); scrollTo(0, 0); }
+    else {
+      const nl = { id: uid(), name: w.name.trim(), color: w.color, icon: w.icon, sections: [] };
+      state.lists.push(nl); route = { name: 'list', id: nl.id }; commit(); scrollTo(0, 0);
+      if (w.multi) setTimeout(() => openInvite(nl.id), 380);
+    }
   } });
   paint();
   if (!l){ try { name.focus({ preventScroll: true }); } catch {} }
@@ -2273,12 +2342,18 @@ function openSectionName(l, sec){
       else {
         const s = { id: uid(), name, collapsed: false };
         l.sections.push(s);
+        if (l.sections.length >= 2) setSecView(l.id, s.id);
         if (route.name !== 'list' || route.id !== l.id){ route = { name: 'list', id: l.id }; }
         save();
         startGhost(null, { listId: l.id, sectionId: s.id });
       }
     } });
   try { inp.focus({ preventScroll: true }); } catch {}
+}
+function openEmojiPicker(l, sec){
+  const EM = ['🎣','⛵','🐟','💼','💻','🎨','🏠','🏗️','🛒','📚','🎮','🧺','✈️','🏃','🍜','💰','💊','🎁','🎵','🎬','⭐','📝','❤️','🔥','📦','🌱','🐱','📷'];
+  const grid = h('div', { class: 'emgrid' }, ...EM.map(e => h('button', { class: 'emb' + (secEmoji(sec) === e ? ' on' : ''), onclick: () => { sec.icon = e; closeSheet(); commit(); } }, e)));
+  openSheet({ title: `「${trunc(sec.name, 8)}」的圖案`, left: '', right: '完成', body: h('div', { class: 'fgroup' }, grid) });
 }
 function openSectionMenu(l, sec){
   const idx = l.sections.indexOf(sec);
@@ -2288,6 +2363,7 @@ function openSectionMenu(l, sec){
   const items = [
     I(UI.plus.replace('stroke-width="3.4"', 'stroke-width="2.2"'), '在這個分類新增', () => { const its = listItems(l.id).filter(i => i.sectionId === sec.id && visibleDone(i)); startGhost(its.length ? its[its.length - 1].id : null, { listId: l.id, sectionId: sec.id }); }),
     I(UI.pencil, '重新命名', later(() => openSectionName(l, sec))),
+    I(ICONS.star, `換圖案（目前 ${secEmoji(sec) || '無'}）`, later(() => openEmojiPicker(l, sec))),
     I(UI.copy, '複製這個分類的文字', () => copyItems(listItems(l.id).filter(i => i.sectionId === sec.id).map(i => i.id), true), '', !n),
     I(UI.down.replace('m5 9 7 7 7-7', 'm5 15 7-7 7 7'), '往上移', () => { l.sections.splice(idx, 1); l.sections.splice(idx - 1, 0, sec); commit(); }, '', idx <= 0),
     I(UI.down, '往下移', () => { l.sections.splice(idx, 1); l.sections.splice(idx + 1, 0, sec); commit(); }, '', idx >= l.sections.length - 1),
