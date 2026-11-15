@@ -1,5 +1,5 @@
 // 一格記事：離線快取。改版時把版本號加一，手機下次打開就會更新。
-const CACHE = 'yige-v16';
+const CACHE = 'yige-v17';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
@@ -11,6 +11,7 @@ self.addEventListener('activate', e => {
 // 先用網路拿最新版，沒網路時用快取
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || new URL(e.request.url).origin !== location.origin) return;
+  if (new URL(e.request.url).pathname.endsWith('version.json')) return;
   e.respondWith(
     fetch(e.request).then(res => {
       const copy = res.clone();

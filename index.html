@@ -509,6 +509,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
+const APP_VERSION = 'yige-v17';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -2990,6 +2991,40 @@ render();
 setTimeout(checkDue, 800);
 cloud.init();
 fb.init();
+// 放在 GitHub 時：App 回到畫面上就檢查有沒有新版本，有就自動更新（正在打字時等打完）
+(() => {
+  if (IN_CLAUDE || location.protocol !== 'https:') return;
+  const CUR = typeof APP_VERSION === 'string' ? APP_VERSION : '';
+  if (!CUR) return;
+  let pending = false, lastCheck = 0;
+  const busy = () => edit || dragging || swiping || sheetOpen() || document.body.classList.contains('typing');
+  function apply(){
+    if (busy()){ pending = true; return; }
+    try { sessionStorage.setItem('yige-updated', '1'); } catch {}
+    location.reload();
+  }
+  async function check(){
+    if (Date.now() - lastCheck < 20000) return;
+    lastCheck = Date.now();
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const v = (await r.json()).v;
+      if (v && v !== CUR){
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistration){
+          const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update().catch(() => {});
+        }
+        apply();
+      }
+    } catch {}
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+  addEventListener('focus', check);
+  setInterval(() => { if (pending) apply(); else if (!document.hidden) check(); }, 60000);
+  document.addEventListener('focusout', () => setTimeout(() => { if (pending && !busy()) apply(); }, 500));
+  setTimeout(check, 3000);
+  try { if (sessionStorage.getItem('yige-updated')){ sessionStorage.removeItem('yige-updated'); setTimeout(() => showToast('已更新到最新版'), 600); } } catch {}
+})();
 // 放在 GitHub Pages 時：可以加到主畫面、離線也能開
 if (!IN_CLAUDE && 'serviceWorker' in navigator && location.protocol === 'https:'){
   addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
