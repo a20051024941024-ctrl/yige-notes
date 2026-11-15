@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -212,8 +212,13 @@ input,textarea,select{font:inherit;color:inherit}
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
-.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px 12px 0 0;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:calc((100dvh - var(--sat)) / var(--z, 1) - 12px);display:flex;flex-direction:column}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px 12px 0 0;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:calc(var(--vvh, 100dvh) - var(--sat) / var(--z, 1) - 12px);display:flex;flex-direction:column}
 .sheet.show{transform:none}
+.sheet{bottom:var(--kb, 0px)}
+body.kb-open .toolbar{display:none}
+body.kb-open .toast{bottom:calc(var(--kb, 0px) + 12px)}
+body.kb-open .sheet .bigic{display:none}
+body.kb-open .sheet{border-radius:12px}
 .shd{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:12px 16px 8px;flex:none}
 .shd h2{margin:0;font-size:17px;font-weight:600;text-align:center}
 .shd .l{justify-self:start;color:var(--blue)}
@@ -403,6 +408,30 @@ if (typeof module !== 'undefined') module.exports = Splitter;
   fit();
   let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 150); });
   addEventListener('orientationchange', () => setTimeout(fit, 300));
+})();
+/* 鍵盤跳出來時：把底部視窗移到鍵盤上面，不要被擋住 */
+(() => {
+  const vv = window.visualViewport; if (!vv) return;
+  const root = document.documentElement;
+  let last = '';
+  function upd(){
+    const z = parseFloat(root.style.getPropertyValue('--z')) || 1;
+    const hidden = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+    const key = Math.round(hidden) + ':' + Math.round(vv.height) + ':' + z;
+    if (key === last) return; last = key;
+    root.style.setProperty('--kb', (hidden / z) + 'px');
+    root.style.setProperty('--vvh', (vv.height / z) + 'px');
+    const open = hidden > 120 || (screen.height && vv.height < screen.height * 0.62 && matchMedia('(pointer: coarse)').matches);
+    document.body && document.body.classList.toggle('kb-open', !!open);
+    // 正在輸入的地方被擋住時，捲到看得到的位置
+    const a = document.activeElement;
+    if (open && a && /^(INPUT|TEXTAREA)$/.test(a.tagName)){
+      setTimeout(() => { const r = a.getBoundingClientRect(); if (r.bottom > vv.height - 8 || r.top < 0) a.scrollIntoView({ block: 'center' }); }, 60);
+    }
+  }
+  vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd);
+  addEventListener('focusin', () => setTimeout(upd, 300));
+  upd();
 })();
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
