@@ -192,6 +192,8 @@ input,textarea,select{font:inherit;color:inherit}
 .avs img:first-child{margin-left:0}
 .byw{display:inline-flex;align-items:center;gap:4px}
 .asg{color:var(--label2)}
+.stamp{color:var(--label3)}
+.stamp.done{color:var(--green)}
 .lrow .lshared{font-size:13px;flex:none;color:var(--label2);background:var(--fill);border-radius:10px;padding:1px 8px}
 .lrow .lshared:empty{display:none}
 .asg.me{color:var(--green);font-weight:600}
@@ -559,6 +561,18 @@ function fmtTime(t){
   const ap = h < 12 ? '上午' : '下午';
   return `${ap}${(h % 12) || 12}:${pad(m)}`;
 }
+/* 提出／完成的時間：今天 14:02、昨天 09:30、11/15、2025/11/15 */
+function fmtStamp(ts, long){
+  if (!ts) return '';
+  const d = new Date(ts), now = new Date();
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const n = dayDiff(ymd(d));
+  if (long) return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${WEEK[d.getDay()]}）${hm}`;
+  if (n === 0) return `今天 ${hm}`;
+  if (n === -1) return `昨天 ${hm}`;
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+}
 function fmtDue(due){ return due ? (fmtDay(due.date) + (due.time ? ' ' + fmtTime(due.time) : '')) : ''; }
 function fireTime(due){
   if (!due) return null;
@@ -619,7 +633,7 @@ function migrate(s){
 function mkItem(o){
   return { id: uid(), listId: o.listId, sectionId: o.sectionId || null, title: o.title || '', notes: o.notes || '', done: !!o.done, doneAt: o.done ? Date.now() : 0,
     flagged: !!o.flagged, priority: o.priority || 0, due: o.due ? clone(o.due) : null, repeat: o.repeat || '',
-    order: o.order ?? 0, createdAt: o.createdAt || Date.now(), notified: '' };
+    order: o.order ?? 0, createdAt: o.createdAt || Date.now(), createdBy: o.createdBy ?? (() => { try { return SYNC.me || ''; } catch { return ''; } })(), notified: '' };
 }
 function lsRead(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
 function lsSet(s){ try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {} }
@@ -1726,8 +1740,14 @@ function rowMeta(it, vm, isEditing){
   const lst = listById(it.listId);
   const sharedHere = IN_CLAUDE ? !!cloud.me : !!(lst && lst.shared);
   if (sharedHere && it.assignee) parts.push(h('span', { class: 'asg' + (it.assignee === SYNC.me ? ' me' : '') }, '👤 ' + (it.assignee === SYNC.me ? '我' : (SYNC.nameOf(it.assignee, it.listId) || '某人'))));
-  if (sharedHere && it.done && it.doneBy) parts.push(h('span', { class: 'byw' }, (it.doneBy === SYNC.me ? '我' : (SYNC.nameOf(it.doneBy, it.listId) || '某人')) + ' 完成'));
-  else if (it.by && SYNC.me && it.by !== SYNC.me && sharedHere){
+  const who = id => id === SYNC.me ? '我' : (SYNC.nameOf(id, it.listId) || '某人');
+  if (it.done && it.doneAt){
+    parts.push(h('span', { class: 'stamp done' }, '✓ ' + (sharedHere && it.doneBy ? who(it.doneBy) + ' ' : '') + fmtStamp(it.doneAt) + ' 完成'));
+  } else if (it.createdAt){
+    parts.push(h('span', { class: 'stamp' }, (sharedHere && it.createdBy ? who(it.createdBy) + ' ' : '') + fmtStamp(it.createdAt) + ' 提出'));
+  }
+  if (it.done) {}
+  else if (it.by && SYNC.me && it.by !== SYNC.me && sharedHere && it.by !== it.createdBy){
     const nm = SYNC.nameOf(it.by, it.listId) || '另一位';
     const av = SYNC.avatarOf(it.by);
     parts.push(h('span', { class: 'byw' }, av ? h('img', { src: av, alt: '' }) : null, nm + ' 改過'));
@@ -2176,6 +2196,13 @@ function openDetail(id){
   const it = itemById(id); if (!it) return;
   const w = clone(it);
   const f = reminderForm(w, { isNew: false });
+  const lst = listById(it.listId);
+  const sharedHere = IN_CLAUDE ? !!cloud.me : !!(lst && lst.shared);
+  const who = id => !sharedHere || !id ? '' : '（' + (id === SYNC.me ? '我' : (SYNC.nameOf(id, it.listId) || '某人')) + '）';
+  const line = (label, val, color) => h('div', { class: 'f' }, h('span', { class: 'fin' }, h('span', { class: 'fl' }, label), h('span', { style: { color: color || 'var(--label2)', fontSize: '15px', textAlign: 'right' } }, val)));
+  f.el.append(h('div', { class: 'fgroup' },
+    line('提出時間', it.createdAt ? fmtStamp(it.createdAt, true) + who(it.createdBy) : '不知道'),
+    line('完成時間', it.done && it.doneAt ? fmtStamp(it.doneAt, true) + who(it.doneBy) : '還沒完成', it.done ? 'var(--green)' : '')));
   f.el.append(h('div', { class: 'fgroup' }, h('button', { class: 'del', onclick: () => { closeSheet(); deleteItems([it.id], `已刪除「${trunc(it.title, 12)}」`); } }, '刪除提醒事項')));
   openSheet({ title: '詳細資訊', body: f.el, onRight: () => {
     const cur = itemById(id); if (!cur) return;
