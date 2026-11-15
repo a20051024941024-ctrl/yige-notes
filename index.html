@@ -9,9 +9,6 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="一格記事">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>一格記事</title>
 <style>
 :root{
@@ -190,6 +187,9 @@ input,textarea,select{font:inherit;color:inherit}
 .avs img{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--bg);margin-left:-6px;object-fit:cover}
 .avs img:first-child{margin-left:0}
 .byw{display:inline-flex;align-items:center;gap:4px}
+.asg{color:var(--label2)}
+.lrow .lshared{font-size:14px;flex:none}
+.asg.me{color:var(--green);font-weight:600}
 .byw img{width:14px;height:14px;border-radius:50%;object-fit:cover}
 
 /* ===== 底部面板 ===== */
@@ -388,6 +388,12 @@ if (typeof module !== 'undefined') module.exports = Splitter;
   addEventListener('orientationchange', () => setTimeout(fit, 300));
 })();
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
+/* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
+const FIREBASE_CONFIG = null;
+/* ↑↑↑ ↑↑↑ */
+const stable = v => Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
+  : (v && typeof v === 'object') ? '{' + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}'
+  : JSON.stringify(v === undefined ? null : v);
 (() => {
 'use strict';
 /* =====================================================================
@@ -440,6 +446,7 @@ const UI = {
   section: P('<path d="M4 6h16M4 12h10M4 18h13"/>'),
   move: P('<path d="M3 7a2 2 0 0 1 2-2h4.2l2 2.2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M10 13.5h6m-2.5-2.5 2.5 2.5-2.5 2.5"/>'),
   dup: P('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M14.5 12v5M12 14.5h5"/><path d="M15.5 5.5v-.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8.5a2 2 0 0 0 2 2h.5"/>'),
+  person: F('<circle cx="12" cy="8" r="4"/><path d="M4 20.5c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5z"/>'),
   bell: F('<path d="M12 22a2.5 2.5 0 0 0 2.4-2h-4.8A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5.5-6.8V3.5a1.5 1.5 0 0 0-3 0v.7A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/>'),
 };
 const $ = s => document.querySelector(s);
@@ -553,7 +560,7 @@ const listItems = id => state.items.filter(i => i.listId === id).sort((a, b) => 
 const secOf = (l, id) => (l && id && l.sections ? l.sections.find(s => s.id === id) : null) || null;
 const secName = it => { const s = secOf(listById(it.listId), it.sectionId); return s ? s.name : ''; };
 
-function save(){ state.updatedAt = Date.now(); if (undoSnap && !undoSnap.after) undoSnap.after = clone(state); lsSet(state); cloud.schedule(); }
+function save(){ state.updatedAt = Date.now(); if (undoSnap && !undoSnap.after) undoSnap.after = clone(state); lsSet(state); cloud.schedule(); if (typeof fb !== 'undefined') fb.schedule(); }
 function commit(){ save(); render(); }
 
 /* ---------- 雲端同步：兩個人共用，每個列表、每個提醒事項分開存，誰改的就只動那一筆 ---------- */
@@ -567,7 +574,7 @@ const cloud = (() => {
   const names = new Map();      // 使用者 id → 顯示名稱
   const avatars = new Map();
   let running = 0;
-  const strip = o => { const { u, by, notified, ...rest } = o; return JSON.stringify(rest); };
+  const strip = o => { const { u, by, notified, ...rest } = o; return stable(rest); };
   const listData = (l, i) => { const d = clone(l); d.pos = i; delete d.u; delete d.by; return d; };
   const itemData = it => { const d = clone(it); delete d.notified; delete d.u; delete d.by; return d; };
   const isReady = () => db && ready.lists && ready.items && seeded && !readOnly;
@@ -730,11 +737,249 @@ function paintStatus(el){
   const others = cloud.people().filter(id => id !== cloud.me);
   const av = h('span', { class: 'avs' }, ...[cloud.me, ...others].filter(Boolean).slice(0, 3).map(id => cloud.avatarOf(id) ? h('img', { src: cloud.avatarOf(id), alt: '' }) : null));
   const who = others.length ? `和 ${others.map(id => cloud.nameOf(id) || '另一位').slice(0, 2).join('、')} 共用 · ` : '';
-  if (!IN_CLAUDE){ el.append(h('span', { class: 'sdot' }), h('span', { class: 'stxt' }, '資料存在這支手機'), h('span', { class: 'shelp' }, '備份／還原')); return; }
+  if (!IN_CLAUDE){
+    const nShared = state.lists.filter(l => l.shared).length;
+    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : '資料存在這支手機';
+    el.append(h('span', { class: 'sdot ' + (nShared ? (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') : '') }), h('span', { class: 'stxt' }, txt), h('span', { class: 'shelp' }, '備份／名字'));
+    return;
+  }
   el.append(dot, h('span', { class: 'stxt' }, (st === 'synced' || st === 'saving') ? who + T[st] : T[st] || ''), av);
 }
 
-function applyPendingRemote(){ cloud.flush(); }
+
+/* ---------- GitHub 版：用 Firebase 跟別人共用列表（每一筆分開存，邀請連結加入） ---------- */
+const fb = (() => {
+  let F = null, db = null, me = null, on = false, failed = false, deferred = false;
+  const subs = new Map();          // listId → { un1, un2, gotList, joining }
+  const synced = new Map();        // 'l:'+listId → json；'i:'+itemId → { lid, j }
+  let myName = (() => { try { return localStorage.getItem('yige-name') || ''; } catch { return ''; } })();
+  const stripL = d => stable({ name: d.name || '', color: d.color || 'blue', icon: d.icon || 'list', sections: d.sections || [] });
+  const stripI = d => { const { u, by, notified, pending, ...rest } = d; return stable(rest); };
+  const itemData = it => { const d = clone(it); delete d.notified; delete d.u; delete d.by; return d; };
+  const listRef = id => F.doc(db, 'lists', id);
+  const itemRef = (lid, id) => F.doc(db, 'lists', lid, 'items', id);
+  const onWriteErr = e => { console.warn(e); if (e && /permission/i.test(e.code || '')) showToast('共用伺服器拒絕寫入，請確認 Firebase 規則'); };
+
+  async function init(){
+    if (IN_CLAUDE || !FIREBASE_CONFIG) return;
+    try {
+      const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
+      const [A, Au, Fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+      const app = A.initializeApp(FIREBASE_CONFIG);
+      const auth = Au.getAuth(app);
+      const cred = await Au.signInAnonymously(auth);
+      me = cred.user.uid;
+      try { db = Fs.initializeFirestore(app, { localCache: Fs.persistentLocalCache() }); } catch { db = Fs.getFirestore(app); }
+      F = Fs; on = true;
+      state.lists.filter(l => l.shared).forEach(l => subscribe(l.id));
+      diff();
+      repaint();
+      handleHash();
+    } catch (e){ console.warn(e); failed = true; repaint(); }
+  }
+  addEventListener('hashchange', () => handleHash());
+  function repaint(){ const el = document.getElementById('syncline'); if (el) paintStatus(el); }
+
+  function subscribe(lid, joining){
+    if (!on || subs.has(lid)) return;
+    const s = { gotList: false, joining: !!joining };
+    subs.set(lid, s);
+    s.un1 = F.onSnapshot(listRef(lid), snap => {
+      if (!snap.exists()){
+        if (snap.metadata.fromCache) return;
+        if (s.gotList || s.joining){
+          const l = listById(lid);
+          const msg = s.joining && !s.gotList ? '邀請連結無效，或這個列表已被刪除' : `「${l ? l.name : '列表'}」已被其他人刪除`;
+          drop(lid); showToast(msg);
+        }
+        return;
+      }
+      const d = snap.data() || {};
+      let l = listById(lid);
+      s.gotList = true; s.joining = false;
+      if (!l){ l = { id: lid, shared: true, sections: [] }; state.lists.push(l); }
+      l.members = d.members || {};
+      const j = stripL(d);
+      if (l.pending || (!snap.metadata.hasPendingWrites && synced.get('l:' + lid) !== j)){
+        synced.set('l:' + lid, j);
+        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', sections: Array.isArray(d.sections) ? d.sections : [], shared: true });
+        delete l.pending;
+      }
+      if (me && myName && l.members[me] !== myName) F.setDoc(listRef(lid), { members: { [me]: myName } }, { merge: true }).catch(onWriteErr);
+      lsSet(state); requestRender(); repaint();
+    }, e => { console.warn(e); if (s.joining){ drop(lid); showToast('打不開這個邀請，請確認網路或連結'); } });
+    s.un2 = F.onSnapshot(F.collection(db, 'lists', lid, 'items'), snap => {
+      let ch = false;
+      snap.docChanges().forEach(c => {
+        const id = c.doc.id, k = 'i:' + id;
+        if (c.doc.metadata && c.doc.metadata.hasPendingWrites) return;
+        if (c.type === 'removed'){
+          const sv = synced.get(k); if (!sv || sv.lid !== lid) return;
+          synced.delete(k);
+          if (edit && edit.id === id) edit = null;
+          state.items = state.items.filter(i => i.id !== id); ch = true; return;
+        }
+        const d = c.doc.data(); if (!d) return;
+        const j = stripI({ ...d, listId: lid });
+        const sv = synced.get(k); if (sv && sv.lid === lid && sv.j === j) return;
+        if (edit && edit.id === id) return;
+        synced.set(k, { lid, j });
+        const it = clone(d); it.id = id; it.listId = lid;
+        const old = itemById(id);
+        if (old){ const n = old.notified; Object.keys(old).forEach(x => delete old[x]); Object.assign(old, it); old.notified = n; }
+        else state.items.push(it);
+        ch = true;
+      });
+      if (ch){ lsSet(state); requestRender(); }
+    }, e => console.warn(e));
+  }
+  function unsub(lid){ const s = subs.get(lid); if (!s) return; try { s.un1 && s.un1(); s.un2 && s.un2(); } catch {} subs.delete(lid); }
+  /* 只從這支手機拿掉（不影響別人） */
+  function drop(lid){
+    unsub(lid);
+    synced.delete('l:' + lid);
+    for (const [k, v] of [...synced]) if (k.startsWith('i:') && v.lid === lid) synced.delete(k);
+    state.lists = state.lists.filter(l => l.id !== lid);
+    state.items = state.items.filter(i => i.listId !== lid);
+    if (!state.lists.length) state.lists.push(defaultList());
+    if (route.name === 'list' && route.id === lid) route = { name: 'home' };
+    lsSet(state); requestRender(); repaint();
+  }
+
+  /* 找出跟雲端不一樣的那幾筆，只寫那幾筆 */
+  function diff(){
+    if (!on) return;
+    const now = Date.now();
+    const sh = new Set(state.lists.filter(l => l.shared && !l.pending).map(l => l.id));
+    const pend = new Set(state.lists.filter(l => l.pending).map(l => l.id));
+    const seenL = new Set(), seenI = new Set();
+    state.lists.forEach(l => {
+      if (!l.shared) return;
+      const k = 'l:' + l.id; seenL.add(k);
+      if (!subs.has(l.id)) subscribe(l.id);
+      if (l.pending) return;
+      const j = stripL(l);
+      if (synced.get(k) !== j){
+        synced.set(k, j);
+        const d = { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], u: now, by: me };
+        if (myName) d.members = { [me]: myName };
+        F.setDoc(listRef(l.id), d, { merge: true }).catch(onWriteErr);
+      }
+    });
+    state.items.forEach(it => {
+      if (pend.has(it.listId)) { seenI.add('i:' + it.id); return; }
+      const k = 'i:' + it.id, sv = synced.get(k);
+      if (!sh.has(it.listId)){ return; }
+      seenI.add(k);
+      const d = itemData(it); const j = stripI(d);
+      if (sv && sv.lid !== it.listId){ F.deleteDoc(itemRef(sv.lid, it.id)).catch(onWriteErr); }
+      if (!sv || sv.lid !== it.listId || sv.j !== j){
+        synced.set(k, { lid: it.listId, j });
+        it.by = me;
+        F.setDoc(itemRef(it.listId, it.id), { ...d, u: now, by: me }).catch(onWriteErr);
+      }
+    });
+    for (const [k, v] of [...synced]){
+      if (k.startsWith('i:') && !seenI.has(k)){ synced.delete(k); F.deleteDoc(itemRef(v.lid, k.slice(2))).catch(onWriteErr); }
+      if (k.startsWith('l:') && !seenL.has(k)){ synced.delete(k); unsub(k.slice(2)); F.deleteDoc(listRef(k.slice(2))).catch(onWriteErr); }
+    }
+  }
+  function requestRender(){ if (edit || dragging || swiping || sheetOpen()) deferred = true; else render(); }
+  function flush(){ if (deferred && !edit && !dragging && !swiping && !sheetOpen()){ deferred = false; render(); } }
+
+  /* ---------- 邀請、加入、離開 ---------- */
+  function strongId(){ const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('').slice(0, 20); }
+  function linkFor(lid){ return location.origin + location.pathname + '#join-' + lid; }
+  function share(lid){
+    let l = listById(lid); if (!l) return null;
+    if (!l.shared){
+      // 換一個很長、猜不到的編號再上傳
+      const nid = strongId(), old = l.id;
+      l.id = nid; l.shared = true;
+      state.items.forEach(i => { if (i.listId === old) i.listId = nid; });
+      if (state.showDone[old] !== undefined){ state.showDone[nid] = state.showDone[old]; delete state.showDone[old]; }
+      if (route.name === 'list' && route.id === old) route = { name: 'list', id: nid };
+      commit();
+    }
+    return l.id;
+  }
+  function join(lid){
+    if (listById(lid)){ route = { name: 'list', id: lid }; render(); return; }
+    state.lists.push({ id: lid, name: '載入中…', color: 'blue', icon: 'list', sections: [], shared: true, pending: true });
+    route = { name: 'list', id: lid }; selectMode = null;
+    lsSet(state); render(); scrollTo(0, 0);
+    subscribe(lid, true);
+  }
+  function handleHash(){
+    const m = location.hash.match(/^#join-([A-Za-z0-9]{8,40})$/);
+    if (!m) return;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch {}
+    if (!on){ showToast(failed ? '連不上共用伺服器，請稍後再開一次連結' : '共用功能還沒設定好'); return; }
+    const lid = m[1];
+    if (!myName) askName(() => join(lid), '加入共用列表'); else join(lid);
+  }
+  function leave(lid){
+    const l = listById(lid);
+    if (on && me) F.setDoc(listRef(lid), { members: { [me]: F.deleteField() } }, { merge: true }).catch(() => {});
+    drop(lid);
+    showToast(`已離開「${trunc(l ? l.name : '列表', 10)}」`);
+  }
+  function setName(n){
+    myName = n; try { localStorage.setItem('yige-name', n); } catch {}
+    if (on) state.lists.filter(l => l.shared && !l.pending).forEach(l => F.setDoc(listRef(l.id), { members: { [me]: n } }, { merge: true }).catch(onWriteErr));
+  }
+  function nameOf(id, lid){
+    if (!id) return '';
+    if (id === me) return myName || '我';
+    const ls = lid ? [listById(lid)] : state.lists;
+    for (const l of ls) if (l && l.members && l.members[id]) return l.members[id];
+    for (const l of state.lists) if (l.members && l.members[id]) return l.members[id];
+    return '';
+  }
+  return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf,
+    get on(){ return on; }, get failed(){ return failed; }, get me(){ return me; }, get myName(){ return myName; }, get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; } };
+})();
+const SYNC = {
+  get me(){ return IN_CLAUDE ? cloud.me : fb.me; },
+  nameOf: (id, lid) => IN_CLAUDE ? cloud.nameOf(id) : fb.nameOf(id, lid),
+  avatarOf: id => IN_CLAUDE ? cloud.avatarOf(id) : '',
+};
+function askName(then, title = '你的名字'){
+  const inp = h('input', { class: 'lname-in', placeholder: '例如：小明', maxlength: 20, 'aria-label': '你的名字', enterkeyhint: 'done', style: { fontSize: '18px' } });
+  inp.value = fb.myName || '';
+  inp.addEventListener('input', () => { $('#sheetR').disabled = !inp.value.trim(); });
+  inp.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter'){ e.preventDefault(); $('#sheetR').click(); } });
+  openSheet({ title, right: '好', rightDisabled: !inp.value.trim(),
+    body: h('div', {}, h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 12px' } }, '一起記的人會看到這個名字，例如「小明 完成」「指派給 小明」。'), h('div', { class: 'fgroup', style: { padding: '16px' } }, inp)),
+    onRight: () => { const n = inp.value.trim(); if (!n) return false; fb.setName(n); setTimeout(() => then && then(), 350); } });
+  try { inp.focus({ preventScroll: true }); } catch {}
+}
+function openInvite(lid){
+  if (!fb.configured){ openSheet({ title: '邀請一起記', left: '', right: '完成', body: h('p', { class: 'cfm' }, '共用功能還沒設定好（缺 Firebase 設定碼）。') }); return; }
+  if (!fb.on){ showToast(fb.failed ? '連不上共用伺服器，請確認網路後重新打開' : '正在連線，請稍等一下再按'); return; }
+  if (!fb.myName){ askName(() => openInvite(lid)); return; }
+  const id = fb.share(lid); if (!id) return;
+  const l = listById(id);
+  const link = fb.linkFor(id);
+  const msg = `一起用「一格記事」記「${l.name}」：\n${link}`;
+  const box = h('div', { class: 'fgroup', style: { padding: '12px 14px', fontSize: '14px', wordBreak: 'break-all', userSelect: 'text', WebkitUserSelect: 'text', color: 'var(--blue)' } }, link);
+  const members = Object.entries(l.members || {}).map(([uid, nm]) => nm + (uid === fb.me ? '（你）' : ''));
+  const I = (icon, label, fn) => h('li', {}, h('button', { html: icon + `<span>${label}</span>`, onclick: fn }));
+  const items = [
+    I(UI.copy, '複製邀請連結', () => { closeSheet(); doCopy(msg, '邀請連結'); }),
+    h('li', {}, h('a', { href: 'https://line.me/R/share?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener', style: { display: 'flex', alignItems: 'center', gap: '12px', minHeight: '48px', padding: '0 14px', color: 'inherit', textDecoration: 'none', borderBottom: '.5px solid var(--sep)' } },
+      h('span', { style: { width: '20px', height: '20px', borderRadius: '5px', background: '#06C755', color: '#fff', fontSize: '9px', fontWeight: 800, display: 'grid', placeItems: 'center' } }, 'LINE'), h('span', {}, '用 LINE 傳送'))),
+  ];
+  if (navigator.share) items.push(I(UI.dup.replace('M14.5 12v5M12 14.5h5', ''), '其他方式分享', () => { navigator.share({ title: '一格記事', text: msg }).catch(() => {}); }));
+  openSheet({ title: '邀請一起記', left: '', right: '完成', body: h('div', {},
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 12px' } }, `把連結傳給要一起記的人，對方打開就會加入「${l.name}」。之後任何一邊新增、修改、打勾、刪除，另一邊都會同步。`),
+    box,
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)),
+    members.length ? h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px', fontSize: '14px' } }, '目前成員：' + members.join('、')) : null,
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '8px 4px 0', fontSize: '13px' } }, '拿到這個連結的人都能看到並修改這個列表，只傳給你要一起記的人。')) });
+}
+
+function applyPendingRemote(){ cloud.flush(); fb.flush(); }
 
 /* ---------- 復原 ---------- */
 let undoSnap = null;
@@ -781,7 +1026,9 @@ const SMART = {
   all:       { name: '全部',   color: 'var(--darkgrey)', icon: 'tray' },
   flagged:   { name: '已標記', color: 'var(--orange)',   icon: 'flag' },
   completed: { name: '已完成', color: 'var(--grey)',     icon: 'check' },
+  mine:      { name: '指派給我', color: 'var(--green)',   icon: 'person' },
 };
+const hasShared = () => state.lists.some(l => l.shared);
 function smartCount(k){
   const t = today();
   const open = state.items.filter(i => !i.done);
@@ -791,6 +1038,7 @@ function smartCount(k){
     case 'all': return open.length;
     case 'flagged': return open.filter(i => i.flagged).length;
     case 'completed': return state.items.filter(i => i.done).length;
+    case 'mine': return open.filter(i => i.assignee && i.assignee === SYNC.me).length;
   }
   return 0;
 }
@@ -863,6 +1111,10 @@ function viewModel(){
     const scope = state.items.filter(i => i.flagged);
     return { ...base, defaultCtx: { flagged: true }, doneScope: scope.filter(i => i.done), sections: [{ items: scope.filter(visibleDone).sort(byListOrder), ctx: { flagged: true } }] };
   }
+  if (k === 'mine'){
+    const scope = state.items.filter(i => i.assignee && i.assignee === SYNC.me);
+    return { ...base, canAdd: false, doneScope: scope.filter(i => i.done), sections: [{ items: scope.filter(visibleDone).sort(byListOrder), ctx: null }] };
+  }
   // completed
   const its = state.items.filter(i => i.done).sort((a, b) => b.doneAt - a.doneAt);
   return { ...base, doneScope: its, completedView: true, sections: [{ items: its, ctx: null }] };
@@ -924,7 +1176,7 @@ function toggleDone(id){
     showToast(`已完成，下次：${fmtDay(nd)}`, [{ label: '復原', fn: undo }]);
     return;
   }
-  it.done = !it.done; it.doneAt = it.done ? Date.now() : 0;
+  it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; it.doneBy = it.done ? (SYNC.me || '') : '';
   if (it.done){
     recentDone.set(id, setTimeout(() => { recentDone.delete(id); if (!edit && !dragging && !swiping) render(); }, 1600));
   } else { clearTimeout(recentDone.get(id)); recentDone.delete(id); }
@@ -1096,6 +1348,7 @@ function fillHome(main){
   }
   const t = h('div', { class: 'tiles' });
   for (const k of Object.keys(SMART)){
+    if (k === 'mine' && !(hasShared() && SYNC.me)) continue;
     const S = SMART[k];
     const ic = k === 'today'
       ? `<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 9.5h17" stroke="currentColor" stroke-width="2"/><text x="12" y="18.2" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="-apple-system,system-ui">${new Date().getDate()}</text></svg>`
@@ -1111,7 +1364,7 @@ function fillHome(main){
     const n = state.items.filter(i => i.listId === l.id && !i.done).length;
     g.append(h('li', {}, h('button', { class: 'lrow', onclick: () => go({ name: 'list', id: l.id }) },
       h('span', { class: 'lic', style: { background: colorOf(l) }, html: ICONS[l.icon] || ICONS.list }),
-      h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
+      h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), l.shared ? h('span', { class: 'lshared', title: '共用中' }, '👥') : null, h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
   });
   v.append(g);
   if (!state.items.length) v.append(h('p', { class: 'hint', style: { whiteSpace: 'pre-line' } }, '點左下角「新增提醒事項」開始。\n把一大段文字貼進去，會自動拆成一個一個提醒事項。'));
@@ -1261,9 +1514,13 @@ function rowMeta(it, vm, isEditing){
     const l = listById(it.listId);
     if (l) parts.push(h('span', { class: 'ln' }, l.name + (secName(it) ? ' › ' + secName(it) : '')));
   }
-  if (it.by && cloud.me && it.by !== cloud.me){
-    const nm = cloud.nameOf(it.by) || '另一位';
-    const av = cloud.avatarOf(it.by);
+  const lst = listById(it.listId);
+  const sharedHere = IN_CLAUDE ? !!cloud.me : !!(lst && lst.shared);
+  if (sharedHere && it.assignee) parts.push(h('span', { class: 'asg' + (it.assignee === SYNC.me ? ' me' : '') }, '👤 ' + (it.assignee === SYNC.me ? '我' : (SYNC.nameOf(it.assignee, it.listId) || '某人'))));
+  if (sharedHere && it.done && it.doneBy) parts.push(h('span', { class: 'byw' }, (it.doneBy === SYNC.me ? '我' : (SYNC.nameOf(it.doneBy, it.listId) || '某人')) + ' 完成'));
+  else if (it.by && SYNC.me && it.by !== SYNC.me && sharedHere){
+    const nm = SYNC.nameOf(it.by, it.listId) || '另一位';
+    const av = SYNC.avatarOf(it.by);
     parts.push(h('span', { class: 'byw' }, av ? h('img', { src: av, alt: '' }) : null, nm + ' 改過'));
   }
   parts.forEach((p, i) => { if (i && !(p.firstChild && p.firstChild.nodeName === 'svg')) meta.append(h('span', {}, '·')); meta.append(p); });
@@ -1672,13 +1929,26 @@ function reminderForm(w, { isNew, onChange }){
     secRow.hidden = !(l && l.sections && l.sections.length);
   };
   secSel.onchange = () => { w.sectionId = secSel.value || null; };
-  listSel.value = w.listId; listSel.onchange = () => { w.listId = listSel.value; fillSec(); };
+  const asgSel = h('select', { 'aria-label': '指派給' });
+  const asgRow = h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--green)' }, html: UI.person }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '指派給'), asgSel, svgEl(UI.chev)));
+  const fillAsg = () => {
+    const l = listById(w.listId);
+    const mem = (!IN_CLAUDE && l && l.shared && l.members) ? l.members : null;
+    asgRow.hidden = !mem;
+    asgSel.textContent = '';
+    if (!mem) return;
+    asgSel.append(h('option', { value: '' }, '沒有指派'), ...Object.entries(mem).map(([uid, nm]) => h('option', { value: uid }, nm + (uid === SYNC.me ? '（我）' : ''))));
+    if (w.assignee && !mem[w.assignee]) asgSel.append(h('option', { value: w.assignee }, '某人'));
+    asgSel.value = w.assignee || '';
+  };
+  asgSel.onchange = () => { w.assignee = asgSel.value || ''; };
+  listSel.value = w.listId; listSel.onchange = () => { w.listId = listSel.value; fillSec(); fillAsg(); };
   wrap.append(h('div', { class: 'fgroup' },
     h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--orange)' }, html: UI.flag }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '旗標'), flagSw)),
     h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--red)' }, html: UI.excl }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '優先順序'), priSel, svgEl(UI.chev))),
     h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: colorOf(listById(w.listId)) }, html: ICONS.list }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '列表'), listSel, svgEl(UI.chev))),
-    secRow));
-  fillSec();
+    secRow, asgRow));
+  fillSec(); fillAsg();
   syncDT();
   setTimeout(() => { autoGrow(title); autoGrow(notes); }, 0);
   return { el: wrap, title };
@@ -1695,7 +1965,7 @@ function openDetail(id){
     const dueChanged = JSON.stringify(cur.due) !== JSON.stringify(w.due);
     if (w.listId !== cur.listId){ cur.order = listItems(w.listId).length; }
     const sid = secOf(listById(w.listId), w.sectionId) ? w.sectionId : null;
-    Object.assign(cur, { title: t, notes: w.notes.replace(/\s+$/, ''), due: w.due, repeat: w.due ? w.repeat : '', flagged: w.flagged, priority: w.priority, listId: w.listId, sectionId: sid });
+    Object.assign(cur, { title: t, notes: w.notes.replace(/\s+$/, ''), due: w.due, repeat: w.due ? w.repeat : '', flagged: w.flagged, priority: w.priority, listId: w.listId, sectionId: sid, assignee: w.assignee || '' });
     if (dueChanged) cur.notified = '';
     commit();
   } });
@@ -1778,11 +2048,13 @@ function openBackup(){
         } catch { closeSheet(); doCopy(backupText(), '備份文字'); }
       }),
       I(UI.copy, '複製備份文字', () => { closeSheet(); doCopy(backupText(), '備份文字'); }))),
+    fb.configured ? h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
+      I(UI.person, `我的名字：${fb.myName || '還沒設定'}`, () => { closeSheet(); setTimeout(() => askName(() => render()), 330); }))) : null,
     h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
       I(UI.folder, '從備份檔還原', () => file.click()),
       I(UI.pencil, '貼上備份文字還原', () => { closeSheet(); setTimeout(openPasteRestore, 330); }))),
     file);
-  openSheet({ title: '備份／還原', left: '', right: '完成', body });
+  openSheet({ title: fb.configured ? '備份／名字' : '備份／還原', left: '', right: '完成', body });
 }
 function openPasteRestore(){
   const ta = h('textarea', { class: 'copyfb', placeholder: '把之前複製的備份文字貼在這裡' });
@@ -1817,7 +2089,12 @@ function openListMenu(vm){
   if (allVisible.length) items.push(I(UI.copy, '複製整個列表的文字', () => copyItems(allVisible.map(i => i.id), true)));
   if (route.name === 'list') items.push(I(UI.pencil, '列表資訊', later(() => openListEditor(route.id))));
   if (!vm.completedView) items.push(I(UI.eye, showDone() ? '隱藏已完成' : '顯示已完成', () => { state.showDone[viewKey()] = !showDone(); commit(); }));
-  if (route.name === 'list') items.push(I(UI.trash, '刪除列表', later(confirmDeleteList), 'red'));
+  if (route.name === 'list' && fb.configured){
+    const L = listById(route.id);
+    items.unshift(I(UI.person, L.shared ? '邀請／成員' : '邀請別人一起記', later(() => openInvite(route.id))));
+    if (L.shared) items.push(I(UI.back.replace('style="width:12px;height:20px"', 'style="width:20px;height:20px"'), '離開這個共用列表', later(() => confirmLeave(route.id)), 'red'));
+  }
+  if (route.name === 'list') items.push(I(UI.trash, listById(route.id).shared ? '刪除列表（所有人）' : '刪除列表', later(confirmDeleteList), 'red'));
   openSheet({ title: vm.title, left: '', right: '完成', body: h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)) });
 }
 /* ---------- 分類 ---------- */
@@ -1965,11 +2242,18 @@ function copyItems(ids, withHeaders = false){
   if (selectMode){ selectMode = null; render(); }
   doCopy(lines.join('\n'), its.length > 1 ? ` ${its.length} 項` : '');
 }
+function confirmLeave(lid){
+  const l = listById(lid); if (!l) return;
+  openSheet({ title: '離開共用列表？', left: '', right: '', body: h('div', {},
+    h('p', { class: 'cfm' }, `「${l.name}」會從你的手機拿掉，其他人還是可以繼續用。之後要回來，請對方再傳一次邀請連結。`),
+    h('button', { class: 'bigbtn red', onclick: () => { closeSheet(); fb.leave(lid); } }, '離開'),
+    h('button', { class: 'bigbtn', onclick: closeSheet }, '取消')) });
+}
 function confirmDeleteList(){
   const l = listById(route.id); if (!l) return;
   const n = state.items.filter(i => i.listId === l.id).length;
   const body = h('div', {},
-    h('p', { class: 'cfm' }, `這會刪除「${l.name}」裡的全部 ${n} 個提醒事項。`),
+    h('p', { class: 'cfm' }, l.shared ? `這會刪除「${l.name}」裡的全部 ${n} 個提醒事項，所有一起記的人都會看不到。只想自己不看的話，請用「離開這個共用列表」。` : `這會刪除「${l.name}」裡的全部 ${n} 個提醒事項。`),
     h('button', { class: 'bigbtn red', onclick: () => {
       closeSheet(); snapshot();
       state.lists = state.lists.filter(x => x.id !== l.id);
@@ -2062,6 +2346,7 @@ setInterval(() => { if (today() !== lastDay){ lastDay = today(); if (!edit && !d
 render();
 setTimeout(checkDue, 800);
 cloud.init();
+fb.init();
 // 放在 GitHub Pages 時：可以加到主畫面、離線也能開
 if (!IN_CLAUDE && 'serviceWorker' in navigator && location.protocol === 'https:'){
   addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
