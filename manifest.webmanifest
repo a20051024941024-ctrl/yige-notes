@@ -1,0 +1,16 @@
+{
+  "name": "一格記事",
+  "short_name": "一格記事",
+  "description": "像 iPhone 提醒事項一樣的待辦清單：貼上一大段文字，自動拆成一個一個提醒事項。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

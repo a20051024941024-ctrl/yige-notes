@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="一格記事">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<title>一格記事</title>
+<style>
+:root{
+  --bg:#F2F2F7; --card:#FFFFFF; --label:#000000; --label2:rgba(60,60,67,.6); --label3:rgba(60,60,67,.3);
+  --sep:rgba(60,60,67,.22); --fill:rgba(118,118,128,.12); --fill2:rgba(118,118,128,.2);
+  --blue:#007AFF; --red:#FF3B30; --orange:#FF9500; --green:#34C759; --grey:#8E8E93; --darkgrey:#5B5B60;
+  --ring:#C7C7CC; --listbg:#FFFFFF; --bar:rgba(249,249,249,.86);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#000000; --card:#1C1C1E; --label:#FFFFFF; --label2:rgba(235,235,245,.6); --label3:rgba(235,235,245,.3);
+    --sep:rgba(84,84,88,.6); --fill:rgba(118,118,128,.24); --fill2:rgba(118,118,128,.32);
+    --blue:#0A84FF; --red:#FF453A; --orange:#FF9F0A; --green:#30D158; --grey:#98989D; --darkgrey:#6C6C70;
+    --ring:#48484A; --listbg:#000000; --bar:rgba(22,22,22,.86);
+  }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--label);font-family:var(--font);font-size:17px;line-height:1.29;-webkit-text-size-adjust:100%}
+body{min-height:100vh;min-height:100dvh}
+body.inlist{background:var(--listbg)}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.view{max-width:700px;margin:0 auto;padding:calc(var(--sat) + 8px) calc(16px + var(--sar)) calc(96px + var(--sab)) calc(16px + var(--sal))}
+
+/* ===== 首頁 ===== */
+.navrow{height:10px}
+.navbtn{color:var(--blue);font-size:17px;padding:8px 4px;display:inline-flex;align-items:center;gap:2px}
+.navbtn svg{width:24px;height:24px}
+.search{display:flex;align-items:center;gap:6px;background:var(--fill);border-radius:10px;height:36px;padding:0 8px;margin:4px 0 18px}
+.search svg{width:17px;height:17px;color:var(--grey);flex:none}
+.search input{flex:1;border:0;background:transparent;outline:none;font-size:17px;min-width:0}
+.search input::placeholder{color:var(--label2)}
+.search .clr{width:20px;height:20px;border-radius:50%;background:var(--grey);color:var(--card);display:grid;place-items:center;flex:none;opacity:.8}
+.search .clr svg{width:10px;height:10px;color:var(--card)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--card);border-radius:12px;padding:10px 12px 9px;text-align:left;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;row-gap:8px;min-height:84px;transition:transform .1s}
+.tile:active{transform:scale(.97)}
+.tile .ic{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:#fff}
+.tile .ic svg{width:19px;height:19px}
+.tile .num{font-size:28px;font-weight:700;line-height:34px;text-align:right}
+.tile .nm{grid-column:1/3;color:var(--label2);font-weight:600;font-size:16px}
+.sechd{font-size:22px;font-weight:700;margin:26px 4px 8px}
+.group{background:var(--card);border-radius:12px;overflow:hidden;list-style:none;margin:0;padding:0}
+.lrow{display:flex;align-items:center;gap:12px;padding:0 0 0 14px;min-height:52px;width:100%;text-align:left}
+.lrow:active{background:var(--fill)}
+.lrow .lic{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:#fff;flex:none}
+.lrow .lic svg{width:16px;height:16px}
+.lrow .lin{flex:1;min-width:0;display:flex;align-items:center;gap:8px;align-self:stretch;border-bottom:.5px solid var(--sep);padding-right:12px}
+.group li:last-child .lin{border-bottom:0}
+.lrow .lname{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow .lcnt{color:var(--label2)}
+.lrow .chev{width:8px;height:14px;color:var(--label3)}
+.hint{color:var(--label2);font-size:13px;text-align:center;margin:22px 12px 0;line-height:1.5}
+
+/* ===== 底部工具列 ===== */
+.toolbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--bar);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--sep)}
+.toolbar .in{max-width:700px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;padding:8px calc(16px + var(--sar)) calc(8px + var(--sab)) calc(14px + var(--sal));min-height:50px}
+.newbtn{display:inline-flex;align-items:center;gap:8px;font-weight:600;color:var(--blue);font-size:17px;padding:6px 0}
+.newbtn .pl{width:26px;height:26px;border-radius:50%;background:currentColor;display:grid;place-items:center}
+.newbtn .pl svg{width:14px;height:14px;color:var(--card)}
+.newbtn:disabled{opacity:.35}
+.addlist{color:var(--blue);font-size:17px;padding:6px 0}
+
+/* ===== 列表頁 ===== */
+.lnav{position:sticky;top:0;z-index:20;background:var(--listbg);margin:0 -16px;padding:calc(var(--sat)) 8px 0;display:flex;align-items:center;justify-content:space-between;height:calc(44px + var(--sat))}
+.lnav .ttl{position:absolute;left:50%;transform:translateX(-50%);font-weight:600;opacity:0;transition:opacity .15s;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.lnav.scrolled .ttl{opacity:1}
+.lnav.scrolled{border-bottom:.5px solid var(--sep)}
+.bigtitle{font-size:34px;font-weight:700;margin:2px 0 4px;letter-spacing:.01em;word-break:break-word}
+.donebar{display:flex;align-items:center;gap:6px;color:var(--label2);font-size:15px;padding:6px 0 8px;border-bottom:.5px solid var(--sep);margin-bottom:2px}
+.donebar .sp{flex:1}
+.donebar button{color:var(--blue);font-size:15px;padding:4px 0}
+.donebar button:disabled{color:var(--label3)}
+.sec{margin-top:14px}
+.sec h4{margin:12px 0 2px;font-size:20px;font-weight:700}
+.sec h4.small{font-size:15px;color:var(--label2);font-weight:600;text-transform:none}
+.rows{list-style:none;margin:0;padding:0}
+.empty{color:var(--label2);text-align:center;padding:56px 12px 8px;font-size:17px}
+.empty small{display:block;font-size:14px;margin-top:8px;line-height:1.55;color:var(--label2)}
+.tapzone{min-height:calc(38vh / var(--z, 1))}
+
+/* 單一提醒事項 */
+.row{position:relative;overflow:hidden;touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.row .acts{position:absolute;top:0;bottom:0;right:0;display:flex;visibility:hidden}
+.row.swiping .acts,.row.open .acts,.row.full .acts{visibility:visible}
+.row .acts button{width:76px;color:#fff;font-size:15px;font-weight:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.row .acts svg{width:20px;height:20px}
+.a-info{background:#8E8E93}.a-flag{background:var(--orange)}.a-del{background:var(--red)}
+.row.full .a-info,.row.full .a-flag{width:0;overflow:hidden;padding:0}
+.row.full .a-del{width:100vw;max-width:700px;align-items:flex-start;padding-left:22px}
+.fg{position:relative;background:var(--listbg);display:flex;align-items:flex-start;gap:12px;padding:0 0 0 2px;transition:transform .25s cubic-bezier(.2,.8,.2,1);will-change:transform}
+.row.swiping .fg,.row.dragging .fg{transition:none}
+.circle{width:24px;height:24px;margin-top:9px;flex:none;border-radius:50%;border:1.6px solid var(--ring);display:grid;place-items:center;position:relative}
+.circle::before{content:"";position:absolute;inset:-10px}
+.circle i{width:14px;height:14px;border-radius:50%;background:var(--c);transform:scale(0);transition:transform .18s}
+.row.done .circle{border-color:var(--c)}
+.row.done .circle i{transform:scale(1)}
+.rbody{flex:1;min-width:0;padding:10px 12px 10px 0;border-bottom:.5px solid var(--sep);display:flex;gap:8px;align-items:flex-start;min-height:44px}
+.rtext{flex:1;min-width:0}
+.title{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:22px}
+.row.done .title{color:var(--label2)}
+.prio{color:var(--c);font-weight:600;margin-right:3px}
+.notes{color:var(--label2);font-size:15px;margin-top:2px;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta{color:var(--label2);font-size:15px;margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:0 6px}
+.meta .od{color:var(--red)}
+.meta svg{width:13px;height:13px;vertical-align:-1px}
+.meta .ln{color:var(--label2)}
+.flagic{width:16px;height:16px;color:var(--orange);margin-top:3px;flex:none}
+.infobtn{width:24px;height:24px;color:var(--blue);flex:none;margin-top:-1px}
+.infobtn svg{width:24px;height:24px}
+.etitle{display:block;width:100%;border:0;background:transparent;outline:none;resize:none;padding:0;margin:0;line-height:1.29;min-height:22px;-webkit-user-select:text;user-select:text}
+.etitle::placeholder{color:var(--label3)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:14px;display:inline-flex;align-items:center;gap:4px;color:var(--label)}
+.chip svg{width:15px;height:15px}
+.chip.on{background:var(--blue);color:#fff}
+.chip.flagon{background:var(--orange);color:#fff}
+.row.dragging{z-index:5;overflow:visible}
+.row.dragging .fg{box-shadow:0 8px 28px rgba(0,0,0,.22);border-radius:10px;transform:scale(1.02)}
+.row.leaving{animation:leave .25s ease forwards}
+@keyframes leave{to{opacity:0;transform:translateX(-30%)}}
+.row.flash .fg{animation:flash 1s ease}
+@keyframes flash{0%{background:var(--fill2)}100%{background:var(--listbg)}}
+
+/* 編輯中可自由捲動 */
+.row.editing{touch-action:auto;-webkit-user-select:text;user-select:text}
+.etitle{max-height:calc(30vh / var(--z, 1));overflow-y:auto}
+.enotes{display:block;width:100%;border:0;background:transparent;outline:none;resize:none;padding:0;margin:4px 0 0;font-size:15px;line-height:1.4;color:var(--label2);max-height:calc(40vh / var(--z, 1));overflow-y:auto;overscroll-behavior:contain;-webkit-user-select:text;user-select:text;touch-action:pan-y}
+.enotes::placeholder{color:var(--label3)}
+.chips{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;touch-action:pan-x;margin-right:-12px;padding-right:12px;-webkit-overflow-scrolling:touch}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;white-space:nowrap}
+.a-copy{background:var(--blue)}
+/* 分類 */
+.shdr{display:flex;align-items:center;gap:4px;padding:22px 0 6px;border-bottom:.5px solid var(--sep);list-style:none}
+.shname{flex:1;min-width:0;text-align:left;font-size:20px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 0}
+.shcnt{color:var(--label2);font-size:15px}
+.shtog{width:34px;height:34px;display:grid;place-items:center;color:var(--label2);flex:none}
+.shtog svg{width:14px;height:14px;transition:transform .2s}
+.shdr.collapsed .shtog svg{transform:rotate(-90deg)}
+.addrow{list-style:none}
+.addrow button{display:flex;align-items:center;gap:12px;width:100%;padding:9px 0 9px 2px;color:var(--label3);font-size:16px;text-align:left}
+.addrow .pl{width:24px;height:24px;border-radius:50%;border:1.6px dashed var(--ring);display:grid;place-items:center;flex:none}
+.addrow .pl svg{width:12px;height:12px}
+/* 選取模式 */
+.circle .ck{display:none;width:14px;height:14px;color:#fff}
+.circle.sel{background:var(--blue);border-color:var(--blue)}
+.circle.sel i{display:none}
+.circle.sel .ck{display:block}
+.row.selecting .rbody{cursor:pointer}
+.selbar{display:flex;align-items:center;justify-content:space-between;width:100%;gap:8px}
+.selbar button{color:var(--blue);font-size:17px;padding:6px 2px}
+.selbar button.red{color:var(--red)}
+.selbar button:disabled{color:var(--label3)}
+.selbar span{color:var(--label2);font-size:15px}
+.menu .ind button{padding-left:46px}
+.menu .lhead button{font-weight:600}
+.menu .lhead .dot{width:14px;height:14px;border-radius:50%;flex:none}
+.copyfb{width:100%;min-height:200px;border:0;border-radius:10px;padding:12px;background:var(--card);font-size:15px;line-height:1.45;-webkit-user-select:text;user-select:text}
+
+/* 共用狀態 */
+.syncline{display:flex;align-items:center;gap:7px;width:100%;margin:0 0 10px;padding:2px 2px;font-size:13px;color:var(--label2);text-align:left}
+.syncline .stxt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.syncline .shelp{color:var(--blue);flex:none}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--grey);flex:none}
+.sdot.synced{background:var(--green)}
+.sdot.saving,.sdot.syncing{background:var(--orange);animation:blink 1s infinite}
+.sdot.offline,.sdot.readonly{background:var(--red)}
+@keyframes blink{50%{opacity:.3}}
+.avs{display:flex;flex:none}
+.avs img{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--bg);margin-left:-6px;object-fit:cover}
+.avs img:first-child{margin-left:0}
+.byw{display:inline-flex;align-items:center;gap:4px}
+.byw img{width:14px;height:14px;border-radius:50%;object-fit:cover}
+
+/* ===== 底部面板 ===== */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
+.backdrop.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px 12px 0 0;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:calc((100dvh - var(--sat)) / var(--z, 1) - 12px);display:flex;flex-direction:column}
+.sheet.show{transform:none}
+.shd{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:12px 16px 8px;flex:none}
+.shd h2{margin:0;font-size:17px;font-weight:600;text-align:center}
+.shd .l{justify-self:start;color:var(--blue)}
+.shd .r{justify-self:end;color:var(--blue);font-weight:600}
+.shd button:disabled{color:var(--label3)}
+.sbd{overflow:auto;padding:6px 16px calc(24px + var(--sab));-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.fgroup{background:var(--card);border-radius:10px;margin:0 0 22px;overflow:hidden}
+.fgroup .f{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 0 0 14px}
+.fgroup .f .fin{flex:1;display:flex;align-items:center;gap:10px;align-self:stretch;border-bottom:.5px solid var(--sep);padding-right:14px;min-width:0}
+.fgroup .f:last-child .fin{border-bottom:0}
+.fgroup .fic{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;color:#fff;flex:none}
+.fgroup .fic svg{width:18px;height:18px}
+.fgroup .fl{flex:1;min-width:0}
+.fgroup .fl small{display:block;color:var(--blue);font-size:14px}
+.fgroup .fl small.od{color:var(--red)}
+.fgroup textarea{width:100%;border:0;background:transparent;outline:none;resize:none;padding:12px 14px;display:block;line-height:1.35}
+.fgroup textarea.tt{border-bottom:.5px solid var(--sep)}
+.fgroup textarea::placeholder{color:var(--label3)}
+.fgroup input[type=date],.fgroup input[type=time]{border:0;background:var(--fill);border-radius:7px;padding:5px 8px;font-size:16px;color:var(--label);min-height:34px}
+.fgroup select{border:0;background:transparent;color:var(--label2);font-size:17px;text-align:right;direction:rtl;outline:none;max-width:60%;-webkit-appearance:none;appearance:none;padding-right:2px}
+.fgroup .chev{width:8px;height:14px;color:var(--label3);flex:none}
+.fgroup .del{color:var(--red);width:100%;text-align:center;min-height:46px}
+.switch{-webkit-appearance:none;appearance:none;width:51px;height:31px;border-radius:16px;background:var(--fill2);position:relative;flex:none;cursor:pointer;transition:background .2s;margin:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.16);transition:transform .2s}
+.switch:checked{background:var(--green)}
+.switch:checked::after{transform:translateX(20px)}
+.splitnote{background:var(--card);border-radius:10px;padding:10px 14px;margin:-12px 0 22px;font-size:14px;color:var(--label2)}
+.splitnote b{color:var(--blue)}
+.splitnote ol{margin:6px 0 0;padding-left:20px;color:var(--label);max-height:140px;overflow:auto}
+.lname-in{width:100%;border:0;background:var(--fill);border-radius:10px;padding:12px 14px;font-size:20px;font-weight:700;text-align:center;outline:none}
+.bigic{width:76px;height:76px;border-radius:50%;margin:8px auto 16px;display:grid;place-items:center;color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.15)}
+.bigic svg{width:38px;height:38px}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:16px}
+.sw{aspect-ratio:1;border-radius:50%;position:relative}
+.sw.on::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:3px solid var(--label3)}
+.icons{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:16px}
+.icn{aspect-ratio:1;border-radius:50%;background:var(--fill);display:grid;place-items:center;color:var(--label2);position:relative}
+.icn svg{width:20px;height:20px}
+.icn.on::after{content:"";position:absolute;inset:-5px;border-radius:50%;border:3px solid var(--label3)}
+.menu{list-style:none;margin:0;padding:0}
+.menu button{width:100%;display:flex;align-items:center;gap:12px;min-height:48px;padding:0 14px;text-align:left;border-bottom:.5px solid var(--sep)}
+.menu li:last-child button{border-bottom:0}
+.menu button:active{background:var(--fill)}
+.menu button svg{width:20px;height:20px;color:var(--label);flex:none}
+.menu button.red,.menu button.red svg{color:var(--red)}
+.cfm{color:var(--label2);text-align:center;margin:4px 8px 20px;line-height:1.5}
+.bigbtn{width:100%;height:50px;border-radius:12px;font-weight:600;background:var(--card);color:var(--blue)}
+.bigbtn.red{color:var(--red)}
+.bigbtn+.bigbtn{margin-top:10px}
+
+/* ===== Toast / 通知橫幅 ===== */
+.toast{position:fixed;left:50%;bottom:calc(66px + var(--sab));transform:translate(-50%,30px);opacity:0;pointer-events:none;z-index:60;background:rgba(40,40,42,.96);color:#fff;border-radius:14px;padding:6px 6px 6px 16px;display:flex;align-items:center;gap:4px;box-shadow:0 8px 28px rgba(0,0,0,.28);width:max-content;max-width:calc(100% - 24px);transition:transform .25s cubic-bezier(.2,.8,.2,1),opacity .2s;font-size:15px}
+.toast.show{transform:translate(-50%,0);opacity:1;pointer-events:auto}
+.toast .msg{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:6px}
+.toast .acts{display:flex;flex:none}
+.toast button{color:#4DA3FF;font-weight:600;padding:8px 10px;border-radius:9px;white-space:nowrap}
+.banner{position:fixed;left:0;right:0;top:calc(var(--sat) + 8px);z-index:70;margin:0 auto;width:calc(100% - 16px);max-width:520px;background:rgba(245,245,247,.94);-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);color:#000;border-radius:18px;box-shadow:0 10px 36px rgba(0,0,0,.25);padding:12px 14px;transform:translateY(-140%);transition:transform .35s cubic-bezier(.2,.8,.2,1)}
+@media (prefers-color-scheme: dark){.banner{background:rgba(44,44,46,.94);color:#fff}}
+.banner:not(.show){visibility:hidden;transition:transform .35s cubic-bezier(.2,.8,.2,1),visibility 0s .35s}
+.banner.show{transform:none}
+.banner .bh{display:flex;align-items:center;gap:8px;font-size:13px;opacity:.65}
+.banner .bh i{width:20px;height:20px;border-radius:5px;background:#fff;display:grid;place-items:center;box-shadow:0 0 0 .5px rgba(0,0,0,.15)}
+.banner .bh i svg{width:14px;height:14px}
+.banner .bh .sp{flex:1}
+.banner .bt{font-weight:600;margin:6px 0 2px;word-break:break-word}
+.banner .bs{font-size:15px;opacity:.75}
+.banner .ba{display:flex;gap:8px;margin-top:10px}
+.banner .ba button{flex:1;height:36px;border-radius:10px;background:rgba(127,127,127,.18);font-weight:600;font-size:15px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toolbar" id="toolbar"><div class="in" id="toolbarIn"></div></div>
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="shd"><button class="l" id="sheetL"></button><h2 id="sheetTitle"></h2><button class="r" id="sheetR"></button></div>
+  <div class="sbd" id="sheetBody"></div>
+</div>
+<div class="toast" id="toast" role="status"><span class="msg" id="toastMsg"></span><span class="acts" id="toastActs"></span></div>
+<div class="banner" id="banner" role="alert"></div>
+
+<script>
+/* =====================================================================
+   拆分引擎：把一大段文字拆成一個一個提醒事項
+   ===================================================================== */
+const Splitter = (() => {
+  const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳❶❷❸❹❺❻❼❽❾❿➀➁➂➃➄➅➆➇➈➉➊➋➌➍➎➏➐➑➒➓⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽⒈⒉⒊⒋⒌⒍⒎⒏⒐⒑';
+  const DONE_RE = /^\s*(?:\[\s*[xX✓✔]\s*\]|【\s*[xX✓✔]\s*】|[☑✓✔✅])/;
+  const STRIP = [
+    /^\s*(?:\[\s*[xX✓✔]?\s*\]|【\s*[xX✓✔]?\s*】|[☐☑☒✅⬜◻◽□▢🔲🔳])\s*/u,
+    /^\s*(?:[-–—*+•·・●○◦▪▫▸▹►▶➤➜→⇒»※◆◇★☆]+|>(?!=))\s*/u,
+    /^\s*第\s*[0-9０-９一二三四五六七八九十百]+\s*[項项條条步點点件個个][、.．:：]?\s*/,
+    /^\s*[(（\[【]\s*(?:[0-9０-９]{1,3}|[一二三四五六七八九十]{1,3}|[a-zA-Z])\s*[)）\]】]\s*/,
+    /^\s*(?:[0-9０-９]{1,3}|[一二三四五六七八九十]{1,3})\s*[.．、)）](?![0-9０-９])\s*/,
+    /^\s*(?:[a-zA-Z]|[ivxIVX]{1,4})[.)）](?=\s)\s*/,
+    new RegExp('^\\s*[' + CIRCLED + ']\\s*'),
+    /^\s*(?:todo|to-do|待辦|代辦|任務)\s*[:：]\s*/i,
+  ];
+  const HEADER_WORDS = /^(?:to-?do(?:\s*list)?|todos?|待辦(?:事項|清單)?|代辦(?:事項|清單)?|要做的事|清單|任務(?:清單)?|今日待辦|今天要做|提醒事項|checklist)$/i;
+  const JUNK_RE = /^[\s\p{P}\p{S}]*$/u;
+  const INLINE_RE = new RegExp('(^|[\\s，,；;。])((?:[0-9０-９]{1,2})[.．、)）](?![0-9０-９])|[(（][0-9０-９]{1,2}[)）])|([' + CIRCLED + '])', 'g');
+  const SENT_RE = /([。；;]+|[！!？?]+)/;
+  const ENUM_RE = /、/;
+  function sentSplit(line){
+    const bits = line.split(SENT_RE), out = [];
+    for (let i = 0; i < bits.length; i += 2){
+      const d = bits[i + 1] || '';
+      const t = bits[i] + (/[！!？?]/.test(d) ? d.slice(0, 1) : '');
+      if (t.trim()) out.push(t);
+    }
+    return out;
+  }
+  const norm = s => s.replace(/[ 　\t]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+  const key = s => s.toLowerCase().replace(/[\s\p{P}]+/gu, '');
+  function clean(raw){
+    let s = raw, done = false;
+    for (let i = 0; i < 5; i++){
+      const before = s;
+      for (const re of STRIP){ if (DONE_RE.test(s)) done = true; s = s.replace(re, ''); }
+      if (s === before) break;
+    }
+    s = norm(s).replace(/[\s，,、；;。]+$/u, '');
+    return { text: s, done };
+  }
+  function inlineSplit(line){
+    const idx = [];
+    INLINE_RE.lastIndex = 0;
+    let m;
+    while ((m = INLINE_RE.exec(line))){
+      idx.push(m.index + (m[1] ? m[1].length : 0));
+      if (m[0].length === 0) INLINE_RE.lastIndex++;
+    }
+    if (idx.length < 2) return null;
+    if (idx[0] > 0 && line.slice(0, idx[0]).trim()) idx.unshift(0);
+    const out = [];
+    for (let i = 0; i < idx.length; i++) out.push(line.slice(idx[i], idx[i + 1]));
+    return out;
+  }
+  function split(text){
+    const lines = String(text || '').replace(/\r\n?/g, '\n').replace(/[\u2028\u2029]/g, '\n').split('\n');
+    const nonEmpty = lines.filter(l => l.trim()).length;
+    const parts = [];
+    for (const line of lines){
+      if (!line.trim()) continue;
+      const inl = inlineSplit(line);
+      if (inl){ parts.push(...inl); continue; }
+      const sp = sentSplit(line).filter(p => clean(p).text.length >= 2);
+      if (sp.length >= 2 && (line.trim().length >= 30 || nonEmpty <= 2)){ parts.push(...sp); continue; }
+      if (nonEmpty === 1){
+        const en = line.split(ENUM_RE).filter(p => p.trim());
+        if (en.length >= 3 && en.every(p => p.trim().length <= 20)){ parts.push(...en); continue; }
+      }
+      parts.push(line);
+    }
+    const items = parts.map(clean).filter(x => x.text && !JUNK_RE.test(x.text));
+    return items.map(x => {
+      const isColon = /[:：]$/.test(x.text) && x.text.length <= 30 && items.length > 1;
+      const isWord = HEADER_WORDS.test(x.text.replace(/[:：]$/, '').trim()) && items.length > 1;
+      return (isColon || isWord) ? { ...x, kind: 'header', text: x.text.replace(/[:：]$/, '') } : { ...x, kind: 'item' };
+    });
+  }
+  /* 回傳要變成提醒事項的部分（略過標題行） */
+  function items(text){ return split(text).filter(x => x.kind === 'item'); }
+  return { split, items, key };
+})();
+if (typeof module !== 'undefined') module.exports = Splitter;
+</script>
+
+<script>
+/* 手機上如果頁面被用電腦寬度畫出來（字會變很小），自動放大回正常比例 */
+(() => {
+  const root = document.documentElement;
+  function fit(){
+    root.style.zoom = '';
+    let z = 1;
+    try {
+      const coarse = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+      const portrait = matchMedia('(orientation: portrait)').matches;
+      const sw = (portrait ? Math.min : Math.max)(screen.width, screen.height);
+      const w = innerWidth;
+      if (coarse && sw > 0 && w > sw * 1.2) z = Math.min(3, w / sw);
+    } catch {}
+    root.style.setProperty('--z', z);
+    if (z !== 1) root.style.zoom = z;
+  }
+  fit();
+  let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 150); });
+  addEventListener('orientationchange', () => setTimeout(fit, 300));
+})();
+const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
+(() => {
+'use strict';
+/* =====================================================================
+   常數與小工具
+   ===================================================================== */
+const COLORS = {
+  red: '#FF3B30', orange: '#FF9500', yellow: '#FFCC00', green: '#34C759', cyan: '#5AC8FA', blue: '#007AFF',
+  indigo: '#5856D6', pink: '#FF2D55', purple: '#AF52DE', brown: '#A2845E', grey: '#8E8E93', mint: '#00C7BE',
+};
+const COLOR_KEYS = Object.keys(COLORS);
+const P = (d, extra = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
+const F = d => `<svg viewBox="0 0 24 24" fill="currentColor">${d}</svg>`;
+const ICONS = {
+  list: F('<circle cx="5" cy="6.5" r="1.8"/><circle cx="5" cy="12" r="1.8"/><circle cx="5" cy="17.5" r="1.8"/><rect x="9" y="5.4" width="12" height="2.2" rx="1.1"/><rect x="9" y="10.9" width="12" height="2.2" rx="1.1"/><rect x="9" y="16.4" width="12" height="2.2" rx="1.1"/>'),
+  cart: P('<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5h3l2.3 11.2a1.6 1.6 0 0 0 1.6 1.3h8.4a1.6 1.6 0 0 0 1.6-1.2L21 7H6.4"/>'),
+  work: P('<rect x="3" y="7" width="18" height="13" rx="2.5"/><path d="M8.5 7V5.5A1.5 1.5 0 0 1 10 4h4a1.5 1.5 0 0 1 1.5 1.5V7M3 12.5h18"/>'),
+  home: P('<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/>'),
+  book: P('<path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5z"/>'),
+  heart: F('<path d="M12 20.5s-8-4.9-8-10.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8 2.9c0 5.7-8 10.6-8 10.6z"/>'),
+  star: F('<path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 17l-5.4 2.9 1.1-6.1-4.5-4.2 6.1-.8z"/>'),
+  gift: P('<rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8h14v-8M12 8v12M12 8S10.5 3.5 8 4.2 8.5 8 12 8zm0 0s1.5-4.5 4-3.8S15.5 8 12 8z"/>'),
+  plane: F('<path d="M21 15.5v-2l-7.5-4.7V4a1.5 1.5 0 0 0-3 0v4.8L3 13.5v2l7.5-2.4V18l-2 1.5V21l3.5-1 3.5 1v-1.5l-2-1.5v-4.9z"/>'),
+  money: P('<rect x="2.5" y="6" width="19" height="12" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>'),
+  pill: P('<rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-40 12 12)"/><path d="m9.5 9.3 5.2 5.4"/>'),
+  bulb: P('<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1 1.3 1 2.2h5.2c0-.9.4-1.7 1-2.2A6 6 0 0 0 12 3z"/>'),
+};
+const ICON_KEYS = Object.keys(ICONS);
+const UI = {
+  back: '<svg viewBox="0 0 12 20" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:20px"><path d="M10 2 2 10l8 8"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>',
+  more: '<svg viewBox="0 0 24 24" style="width:28px;height:28px"><circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7.6" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="16.4" cy="12" r="1.5" fill="currentColor"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"><path d="M12 4.5v15M4.5 12h15"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="12" cy="7.6" r="1.25" fill="currentColor"/><path d="M12 10.8v6.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  flag: F('<path d="M5 21V4.2c2.6-1.4 5.1-1.2 7.4 0 2.2 1.1 4.4 1.2 6.6.2v9.8c-2.2 1-4.4.9-6.6-.2-2.3-1.2-4.8-1.4-7.4 0"/><rect x="4" y="3" width="2" height="18.5" rx="1"/>'),
+  cal: P('<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>'),
+  clock: P('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  repeat: P('<path d="M17 3l3 3-3 3"/><path d="M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3"/><path d="M20 13v2a3 3 0 0 1-3 3H4"/>'),
+  tray: P('<path d="M3.5 13.5 6 5.5h12l2.5 8V18a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 18z"/><path d="M3.5 13.5h4.5a4 4 0 0 0 8 0h4.5"/>'),
+  check: P('<path d="m5 12.5 4.5 4.5L19 7.5"/>', 'stroke-width="3"'),
+  trash: P('<path d="M4 7h16M9.5 7V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v2M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7"/>'),
+  eye: P('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'),
+  pencil: P('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>'),
+  search: P('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>', 'stroke-width="2.4"'),
+  x: P('<path d="M6 6l12 12M18 6 6 18"/>', 'stroke-width="3.2"'),
+  excl: P('<path d="M12 4v10M12 19v.5"/>', 'stroke-width="3"'),
+  copy: P('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M15.5 5.5v-.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8.5a2 2 0 0 0 2 2h.5"/>'),
+  folder: P('<path d="M3 7a2 2 0 0 1 2-2h4.2l2 2.2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  down: P('<path d="m5 9 7 7 7-7"/>', 'stroke-width="2.6"'),
+  select: P('<circle cx="12" cy="12" r="9"/><path d="m8 12.3 2.8 2.8L16.5 9.5"/>'),
+  section: P('<path d="M4 6h16M4 12h10M4 18h13"/>'),
+  move: P('<path d="M3 7a2 2 0 0 1 2-2h4.2l2 2.2H19a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M10 13.5h6m-2.5-2.5 2.5 2.5-2.5 2.5"/>'),
+  dup: P('<rect x="8.5" y="8.5" width="12" height="12" rx="2.5"/><path d="M14.5 12v5M12 14.5h5"/><path d="M15.5 5.5v-.5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8.5a2 2 0 0 0 2 2h.5"/>'),
+  bell: F('<path d="M12 22a2.5 2.5 0 0 0 2.4-2h-4.8A2.5 2.5 0 0 0 12 22zm7-6V11a7 7 0 0 0-5.5-6.8V3.5a1.5 1.5 0 0 0-3 0v.7A7 7 0 0 0 5 11v5l-2 2v1h18v-1z"/>'),
+};
+const $ = s => document.querySelector(s);
+const svgEl = (html, cls) => { const t = document.createElement('template'); t.innerHTML = html.trim(); const e = t.content.firstElementChild; if (cls) e.classList.add(cls); return e; };
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const clone = o => JSON.parse(JSON.stringify(o));
+const pad = n => String(n).padStart(2, '0');
+const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+/* ---------- 日期 ---------- */
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => ymd(new Date());
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return ymd(d); };
+const dayDiff = s => Math.round((parseD(s) - parseD(today())) / 864e5);
+function fmtDay(s){
+  const n = dayDiff(s), d = parseD(s), now = new Date();
+  if (n === 0) return '今天';
+  if (n === 1) return '明天';
+  if (n === -1) return '昨天';
+  if (n > 1 && n < 7) return '星期' + WEEK[d.getDay()];
+  if (d.getFullYear() === now.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
+function fmtTime(t){
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ap = h < 12 ? '上午' : '下午';
+  return `${ap}${(h % 12) || 12}:${pad(m)}`;
+}
+function fmtDue(due){ return due ? (fmtDay(due.date) + (due.time ? ' ' + fmtTime(due.time) : '')) : ''; }
+function fireTime(due){
+  if (!due) return null;
+  const d = parseD(due.date);
+  const [h, m] = (due.time || '09:00').split(':').map(Number);
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+function isOverdue(it){
+  if (!it.due || it.done) return false;
+  if (it.due.time) return fireTime(it.due) < Date.now();
+  return dayDiff(it.due.date) < 0;
+}
+const REPEATS = [['', '永不'], ['daily', '每天'], ['weekdays', '平日'], ['weekends', '週末'], ['weekly', '每週'], ['biweekly', '每兩週'], ['monthly', '每月'], ['yearly', '每年']];
+const repeatLabel = r => (REPEATS.find(x => x[0] === r) || REPEATS[0])[1];
+function nextDate(s, rule){
+  const d = parseD(s);
+  const step = () => {
+    switch (rule){
+      case 'daily': d.setDate(d.getDate() + 1); break;
+      case 'weekdays': do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6); break;
+      case 'weekends': do { d.setDate(d.getDate() + 1); } while (d.getDay() !== 0 && d.getDay() !== 6); break;
+      case 'weekly': d.setDate(d.getDate() + 7); break;
+      case 'biweekly': d.setDate(d.getDate() + 14); break;
+      case 'monthly': { const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + 1); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); break; }
+      case 'yearly': { const mo = d.getMonth(), day = d.getDate(); d.setDate(1); d.setFullYear(d.getFullYear() + 1); d.setMonth(mo); d.setDate(Math.min(day, new Date(d.getFullYear(), mo + 1, 0).getDate())); break; }
+    }
+  };
+  step();
+  // 若原本就逾期很久，跳到今天之後的第一個
+  let guard = 0;
+  while (ymd(d) < today() && guard++ < 1000) step();
+  return ymd(d);
+}
+const weekendDate = () => { const d = new Date(); const add = (6 - d.getDay() + 7) % 7 || 7; d.setDate(d.getDate() + (d.getDay() === 6 ? 7 : add)); return ymd(d); };
+
+/* =====================================================================
+   狀態、遷移、儲存
+   ===================================================================== */
+const LS_KEY = 'yige-reminders.v2', LS_OLD = 'yige-notes.v1';
+const CLIENT = Math.random().toString(36).slice(2, 10);
+function defaultList(){ return { id: uid(), name: '提醒事項', color: 'blue', icon: 'list', sections: [] }; }
+function blank(){ return { v: 2, updatedAt: 0, lists: [defaultList()], items: [], showDone: {} }; }
+function migrate(s){
+  if (!s || typeof s !== 'object') return null;
+  if (s.v === 2 && Array.isArray(s.lists) && Array.isArray(s.items)){ s.showDone = s.showDone || {}; s.lists.forEach(l => { l.sections = Array.isArray(l.sections) ? l.sections : []; }); return s; }
+  if (Array.isArray(s.lists) && s.lists.every(l => l && Array.isArray(l.items))){      // v1 → v2
+    const out = { v: 2, updatedAt: s.updatedAt || Date.now(), lists: [], items: [], showDone: {} };
+    s.lists.forEach((l, i) => {
+      out.lists.push({ id: l.id, name: l.title || (i ? '列表 ' + (i + 1) : '提醒事項'), color: COLOR_KEYS[[5, 1, 3, 9, 8, 0][i % 6]], icon: 'list', sections: [] });
+      l.items.forEach((it, j) => out.items.push(mkItem({ listId: l.id, title: it.text || '', done: !!it.done, order: j, createdAt: it.createdAt })));
+    });
+    if (!out.lists.length) out.lists.push(defaultList());
+    return out;
+  }
+  return null;
+}
+function mkItem(o){
+  return { id: uid(), listId: o.listId, sectionId: o.sectionId || null, title: o.title || '', notes: o.notes || '', done: !!o.done, doneAt: o.done ? Date.now() : 0,
+    flagged: !!o.flagged, priority: o.priority || 0, due: o.due ? clone(o.due) : null, repeat: o.repeat || '',
+    order: o.order ?? 0, createdAt: o.createdAt || Date.now(), notified: '' };
+}
+function lsRead(k){ try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }
+function lsSet(s){ try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch {} }
+let state = migrate(lsRead(LS_KEY)) || migrate(lsRead(LS_OLD)) || blank();
+if (!state.lists.length) state.lists.push(defaultList());
+
+let route = { name: 'home' };
+let query = '';
+let edit = null;            // { id } 或 { ghost:{afterId, ctx} }，再加 value / notes / field / caret
+let selectMode = null;      // 選取模式：Set(ids)
+let dragging = false, swiping = false, rendering = false;
+let pendingRemote = null;
+const recentDone = new Map();
+
+const listById = id => state.lists.find(l => l.id === id);
+const itemById = id => state.items.find(i => i.id === id);
+const firstList = () => { if (!state.lists.length) state.lists.push(defaultList()); return state.lists[0]; };
+const colorOf = l => COLORS[(l && l.color) || 'blue'] || COLORS.blue;
+const listItems = id => state.items.filter(i => i.listId === id).sort((a, b) => a.order - b.order);
+const secOf = (l, id) => (l && id && l.sections ? l.sections.find(s => s.id === id) : null) || null;
+const secName = it => { const s = secOf(listById(it.listId), it.sectionId); return s ? s.name : ''; };
+
+function save(){ state.updatedAt = Date.now(); if (undoSnap && !undoSnap.after) undoSnap.after = clone(state); lsSet(state); cloud.schedule(); }
+function commit(){ save(); render(); }
+
+/* ---------- 雲端同步：兩個人共用，每個列表、每個提醒事項分開存，誰改的就只動那一筆 ---------- */
+const cloud = (() => {
+  let db = null, me = null, user = null, canWrite = null, readOnly = false;
+  const ready = { lists: false, items: false };
+  let seeded = false, status = 'local', deferred = false, loadTimer = null;
+  const synced = new Map();     // 'l:id' / 'i:id' → 最後一次跟雲端一致的內容
+  const queue = new Map();      // 等著寫入的
+  const inflight = new Set();
+  const names = new Map();      // 使用者 id → 顯示名稱
+  const avatars = new Map();
+  let running = 0;
+  const strip = o => { const { u, by, notified, ...rest } = o; return JSON.stringify(rest); };
+  const listData = (l, i) => { const d = clone(l); d.pos = i; delete d.u; delete d.by; return d; };
+  const itemData = it => { const d = clone(it); delete d.notified; delete d.u; delete d.by; return d; };
+  const isReady = () => db && ready.lists && ready.items && seeded && !readOnly;
+  function setStatus(st){ status = st; const el = document.getElementById('syncline'); if (el) paintStatus(el); }
+
+  async function init(){
+    if (!window.claude || typeof window.claude.use !== 'function'){ setStatus('local'); return; }
+    try {
+      const [d, u] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      user = u; me = u ? await u.id() : null;
+      if (!d){ setStatus('local'); return; }
+      db = d;
+      canWrite = u ? await u.can('data.write') : null;
+      if (canWrite === false) readOnly = true;
+      setStatus('syncing');
+      // 舊版存在個人空間的資料：如果這台裝置沒有，先拿回來
+      if (me){
+        try {
+          const snap = await Promise.race([db.doc('data/users/' + me + '/notebook').get(), new Promise(r => setTimeout(() => r(null), 6000))]);
+          if (snap && snap.exists){
+            const d0 = snap.data() || {};
+            const r = migrate(JSON.parse(d0.json));
+            if (r && (Number(d0.updatedAt) || 0) > state.updatedAt && r.items.length >= state.items.length){
+              r.showDone = state.showDone; state = r; lsSet(state); render();
+            }
+          }
+        } catch {}
+      }
+      loadTimer = setTimeout(() => { if (!seeded) setStatus('offline'); }, 10000);
+      db.collection('lists').onSnapshot(snap => onColl('lists', snap), err => onErr(err));
+      db.collection('items').onSnapshot(snap => onColl('items', snap), err => onErr(err));
+    } catch { setStatus('local'); }
+  }
+  function onErr(e){ clearTimeout(loadTimer); setStatus(e && e.code === 'revoked' ? 'local' : 'offline'); }
+
+  function onColl(coll, snap){
+    const pre = coll === 'lists' ? 'l:' : 'i:';
+    let changed = false, newPeople = false;
+    for (const ch of snap.docChanges()){
+      const id = ch.doc.id, k = pre + id;
+      if (queue.has(k) || inflight.has(k)) continue;
+      if (ch.doc.metadata && ch.doc.metadata.hasPendingWrites) continue;
+      if (ch.type === 'removed'){
+        if (!synced.has(k)) continue;
+        synced.delete(k);
+        if (coll === 'lists') state.lists = state.lists.filter(l => l.id !== id);
+        else { if (edit && edit.id === id) edit = null; state.items = state.items.filter(i => i.id !== id); }
+        changed = true; continue;
+      }
+      const d = ch.doc.data(); if (!d) continue;
+      const j = strip(d);
+      if (synced.get(k) === j) continue;
+      synced.set(k, j);
+      if (d.by && !names.has(d.by)) newPeople = true;
+      if (coll === 'lists'){
+        const l = clone(d); l.id = id; l.sections = Array.isArray(l.sections) ? l.sections : [];
+        const k2 = state.lists.findIndex(x => x.id === id);
+        if (k2 >= 0) state.lists[k2] = l; else state.lists.push(l);
+      } else {
+        if (edit && edit.id === id) continue;         // 正在編輯的那一格先不動
+        const it = clone(d); it.id = id;
+        const old = itemById(id);
+        if (old){ it.notified = old.notified; Object.keys(old).forEach(key => delete old[key]); Object.assign(old, it); }
+        else state.items.push(it);
+      }
+      changed = true;
+    }
+    if (coll === 'lists' && changed) state.lists.sort((a, b) => (a.pos ?? 0) - (b.pos ?? 0));
+    if (!(snap.metadata && snap.metadata.fromCache) && !ready[coll]){ ready[coll] = true; maybeSeed(); }
+    if (changed){ lsSet(state); requestRender(); }
+    if (newPeople) loadNames();
+  }
+
+  function maybeSeed(){
+    if (!ready.lists || !ready.items || seeded) return;
+    seeded = true; clearTimeout(loadTimer);
+    const remoteHas = [...synced.keys()].some(k => k.startsWith('l:'));
+    if (remoteHas){
+      // 雲端已經有共用的資料：以雲端為準
+      state.lists = state.lists.filter(l => synced.has('l:' + l.id));
+      state.items = state.items.filter(i => synced.has('i:' + i.id));
+      if (!state.lists.length) state.lists.push(defaultList());
+      if (route.name === 'list' && !listById(route.id)) route = { name: 'home' };
+      lsSet(state); requestRender();
+    }
+    setStatus(readOnly ? 'readonly' : 'synced');
+    diff();
+    loadNames();
+  }
+
+  /* 找出跟雲端不一樣的那幾筆，只寫那幾筆 */
+  function diff(){
+    if (!isReady()) return;
+    const now = Date.now(), seen = new Set();
+    state.lists.forEach((l, i) => {
+      const k = 'l:' + l.id; seen.add(k);
+      const d = listData(l, i); const j = strip(d);
+      if (synced.get(k) !== j){ synced.set(k, j); d.u = now; d.by = me || ''; queue.set(k, { op: 'set', coll: 'lists', id: l.id, data: d }); }
+    });
+    state.items.forEach(it => {
+      const k = 'i:' + it.id; seen.add(k);
+      const d = itemData(it); const j = strip(d);
+      if (synced.get(k) !== j){ synced.set(k, j); it.by = me || ''; d.u = now; d.by = me || ''; queue.set(k, { op: 'set', coll: 'items', id: it.id, data: d }); }
+    });
+    for (const k of [...synced.keys()]) if (!seen.has(k)){ synced.delete(k); queue.set(k, { op: 'del', coll: k[0] === 'l' ? 'lists' : 'items', id: k.slice(2) }); }
+    pump();
+  }
+  function pump(){
+    if (queue.size || inflight.size) setStatus('saving');
+    for (const [k, job] of queue){
+      if (running >= 3) break;
+      if (inflight.has(k)) continue;
+      queue.delete(k); inflight.add(k); running++;
+      run(job).then(() => {}, e => {
+        const c = e && e.code;
+        if (c === 'invalid_argument'){ readOnly = true; setStatus('readonly'); }
+        else if (c === 'quota_exceeded'){ showToast('共用空間已滿，請刪掉一些已完成的項目'); }
+        else if (!queue.has(k)){ synced.delete(k); setTimeout(() => { if (!queue.has(k)) { queue.set(k, job); pump(); } }, 3000 + Math.random() * 2000); }
+      }).finally(() => {
+        inflight.delete(k); running--;
+        if (!queue.size && !inflight.size && !readOnly) setStatus('synced');
+        pump();
+      });
+    }
+  }
+  async function run(job){
+    const ref = db.collection(job.coll).doc(job.id);
+    const once = () => job.op === 'del' ? ref.delete() : ref.set(job.data);
+    try { await once(); }
+    catch (e){ if (e && e.code === 'unavailable'){ await new Promise(r => setTimeout(r, 500 + Math.random() * 800)); await once(); } else throw e; }
+  }
+  function requestRender(){
+    if (edit || dragging || swiping || sheetOpen()) deferred = true;
+    else render();
+  }
+  function flush(){ if (deferred && !edit && !dragging && !swiping && !sheetOpen()){ deferred = false; render(); } }
+  async function loadNames(){
+    if (!user) return;
+    const ids = [...new Set([...state.items.map(i => i.by), ...state.lists.map(l => l.by)].filter(Boolean))];
+    if (!ids.length) return;
+    try {
+      const ps = await user.profiles(ids);
+      let ch = false;
+      for (const id of ids){ const p = ps[id]; if (!p) continue; if (names.get(id) !== p.name){ names.set(id, p.name || ''); ch = true; } avatars.set(id, p.avatarUrl); }
+      if (ch) requestRender();
+    } catch {}
+  }
+  function people(){ return [...new Set([...state.items.map(i => i.by), ...state.lists.map(l => l.by)].filter(Boolean))]; }
+  return {
+    init, schedule: diff, flush,
+    get me(){ return me; }, get status(){ return status; }, get shared(){ return !!db; },
+    nameOf: id => names.get(id) || '', avatarOf: id => avatars.get(id) || '', people,
+  };
+})();
+function paintStatus(el){
+  const st = cloud.status;
+  const T = { local: '只存在這台裝置', offline: '暫時連不上，先存在這台裝置', syncing: '同步中…', saving: '儲存中…', synced: '已同步', readonly: '你目前只能看，不能修改' };
+  el.textContent = '';
+  const dot = h('span', { class: 'sdot ' + st });
+  const others = cloud.people().filter(id => id !== cloud.me);
+  const av = h('span', { class: 'avs' }, ...[cloud.me, ...others].filter(Boolean).slice(0, 3).map(id => cloud.avatarOf(id) ? h('img', { src: cloud.avatarOf(id), alt: '' }) : null));
+  const who = others.length ? `和 ${others.map(id => cloud.nameOf(id) || '另一位').slice(0, 2).join('、')} 共用 · ` : '';
+  if (!IN_CLAUDE){ el.append(h('span', { class: 'sdot' }), h('span', { class: 'stxt' }, '資料存在這支手機'), h('span', { class: 'shelp' }, '備份／還原')); return; }
+  el.append(dot, h('span', { class: 'stxt' }, (st === 'synced' || st === 'saving') ? who + T[st] : T[st] || ''), av);
+}
+
+function applyPendingRemote(){ cloud.flush(); }
+
+/* ---------- 復原 ---------- */
+let undoSnap = null;
+const snapshot = () => { undoSnap = { before: clone(state), after: null }; };
+function docMap(st){
+  const m = new Map();
+  st.lists.forEach((l, i) => { const d = clone(l); delete d.u; delete d.by; d.pos = i; m.set('l:' + l.id, [JSON.stringify(d), l]); });
+  st.items.forEach(it => { const d = clone(it); delete d.u; delete d.by; delete d.notified; m.set('i:' + it.id, [JSON.stringify(d), it]); });
+  return m;
+}
+/* 只還原這個動作改到的那幾筆，不會把另一個人剛改的東西也蓋回去 */
+function undo(){
+  if (!undoSnap) return;
+  const { before, after } = undoSnap; undoSnap = null; edit = null;
+  if (!after){ hideToast(); return; }
+  const B = docMap(before), A = docMap(after);
+  const keys = new Set([...B.keys(), ...A.keys()]);
+  let listsTouched = false;
+  for (const k of keys){
+    const b = B.get(k), a = A.get(k);
+    if (b && a && b[0] === a[0]) continue;
+    const isList = k[0] === 'l', id = k.slice(2);
+    const arr = isList ? state.lists : state.items;
+    const idx = arr.findIndex(x => x.id === id);
+    if (!b){ if (idx >= 0) arr.splice(idx, 1); }
+    else { const obj = clone(b[1]); if (idx >= 0) arr[idx] = obj; else arr.push(obj); }
+    if (isList) listsTouched = true;
+  }
+  if (listsTouched){
+    const order = before.lists.map(l => l.id);
+    state.lists.sort((x, y) => { const a = order.indexOf(x.id), b = order.indexOf(y.id); return (a < 0 ? 1e9 : a) - (b < 0 ? 1e9 : b); });
+    if (!state.lists.length) state.lists.push(defaultList());
+  }
+  if (route.name === 'list' && !listById(route.id)) route = { name: 'home' };
+  commit(); hideToast();
+}
+
+/* =====================================================================
+   智慧型列表
+   ===================================================================== */
+const SMART = {
+  today:     { name: '今天',   color: 'var(--blue)',     icon: 'cal' },
+  scheduled: { name: '已排程', color: 'var(--red)',      icon: 'cal' },
+  all:       { name: '全部',   color: 'var(--darkgrey)', icon: 'tray' },
+  flagged:   { name: '已標記', color: 'var(--orange)',   icon: 'flag' },
+  completed: { name: '已完成', color: 'var(--grey)',     icon: 'check' },
+};
+function smartCount(k){
+  const t = today();
+  const open = state.items.filter(i => !i.done);
+  switch (k){
+    case 'today': return open.filter(i => i.due && i.due.date <= t).length;
+    case 'scheduled': return open.filter(i => i.due).length;
+    case 'all': return open.length;
+    case 'flagged': return open.filter(i => i.flagged).length;
+    case 'completed': return state.items.filter(i => i.done).length;
+  }
+  return 0;
+}
+const viewKey = () => route.name === 'list' ? route.id : route.name === 'smart' ? route.key : 'search';
+const showDone = () => !!state.showDone[viewKey()];
+const visibleDone = i => !i.done || showDone() || recentDone.has(i.id);
+const byDue = (a, b) => (a.due.date + (a.due.time || '')).localeCompare(b.due.date + (b.due.time || '')) || a.order - b.order;
+const byListOrder = (a, b) => state.lists.findIndex(l => l.id === a.listId) - state.lists.findIndex(l => l.id === b.listId) || a.order - b.order;
+
+/* 依目前頁面算出要顯示的分區 */
+function viewModel(){
+  const t = today();
+  if (route.name === 'list'){
+    const l = listById(route.id);
+    const all = listItems(l.id);
+    const vis = all.filter(visibleDone);
+    const secs = [{ secId: null, items: vis.filter(i => !secOf(l, i.sectionId)), ctx: { listId: l.id, sectionId: null } }];
+    (l.sections || []).forEach(s => secs.push({ secId: s.id, sec: s, title: s.name, collapsed: !!s.collapsed,
+      items: vis.filter(i => i.sectionId === s.id), openCount: all.filter(i => i.sectionId === s.id && !i.done).length,
+      ctx: { listId: l.id, sectionId: s.id } }));
+    return { title: l.name, color: colorOf(l), canAdd: true, sortable: true, list: l, sectioned: (l.sections || []).length > 0,
+      doneScope: all.filter(i => i.done), sections: secs };
+  }
+  if (route.name === 'search'){
+    const q = query.trim().toLowerCase();
+    const its = state.items.filter(i => (i.title + ' ' + i.notes).toLowerCase().includes(q)).sort(byListOrder);
+    return { title: '搜尋', color: 'var(--blue)', canAdd: false, showList: true, doneScope: [], noDoneBar: true,
+      sections: [{ items: its, ctx: null }] };
+  }
+  const k = route.key, S = SMART[k];
+  const base = { title: S.name, color: S.color, canAdd: k !== 'completed', showList: true };
+  if (k === 'today'){
+    const scope = state.items.filter(i => i.due && i.due.date <= t);
+    const its = scope.filter(i => (i.due.date === t || !i.done) && visibleDone(i)).sort(byDue);
+    const ctx = { due: { date: t, time: null } };
+    const od = its.filter(i => i.due.date < t);
+    const td = its.filter(i => i.due.date === t);
+    const h = i => i.due.time ? Number(i.due.time.slice(0, 2)) : -1;
+    const secs = [
+      { title: '逾期', red: true, items: od, ctx },
+      { title: '全天', items: td.filter(i => h(i) < 0), ctx },
+      { title: '早上', items: td.filter(i => h(i) >= 0 && h(i) < 12), ctx: { due: { date: t, time: '09:00' } } },
+      { title: '下午', items: td.filter(i => h(i) >= 12 && h(i) < 18), ctx: { due: { date: t, time: '14:00' } } },
+      { title: '今晚', items: td.filter(i => h(i) >= 18), ctx: { due: { date: t, time: '19:00' } } },
+    ];
+    return { ...base, defaultCtx: ctx, doneScope: scope.filter(i => i.done && i.due.date === t), sections: secs.filter(s => s.items.length), allSections: secs };
+  }
+  if (k === 'scheduled'){
+    const scope = state.items.filter(i => i.due);
+    const its = scope.filter(visibleDone).sort(byDue);
+    const secs = [];
+    const od = its.filter(i => i.due.date < t && !i.done);
+    if (od.length) secs.push({ title: '逾期', red: true, items: od, ctx: { due: { date: t, time: null } } });
+    const rest = its.filter(i => !(i.due.date < t && !i.done));
+    const map = new Map();
+    rest.forEach(i => { if (!map.has(i.due.date)) map.set(i.due.date, []); map.get(i.due.date).push(i); });
+    if (!map.has(t)) map.set(t, []);
+    [...map.keys()].sort().forEach(d => {
+      const dd = parseD(d);
+      const ttl = d === t ? '今天' : d === addDays(t, 1) ? '明天' : `${dd.getMonth() + 1}月${dd.getDate()}日 星期${WEEK[dd.getDay()]}` + (dd.getFullYear() !== new Date().getFullYear() ? ` ${dd.getFullYear()}` : '');
+      secs.push({ title: ttl, small: d < t, items: map.get(d), ctx: { due: { date: d < t ? t : d, time: null } }, keepEmpty: d === t });
+    });
+    return { ...base, defaultCtx: { due: { date: t, time: null } }, doneScope: scope.filter(i => i.done), sections: secs };
+  }
+  if (k === 'all'){
+    const secs = state.lists.map(l => ({ title: l.name, tcolor: colorOf(l), items: listItems(l.id).filter(visibleDone), ctx: { listId: l.id }, keepEmpty: true }));
+    return { ...base, showList: false, defaultCtx: { listId: firstList().id }, doneScope: state.items.filter(i => i.done), sections: secs };
+  }
+  if (k === 'flagged'){
+    const scope = state.items.filter(i => i.flagged);
+    return { ...base, defaultCtx: { flagged: true }, doneScope: scope.filter(i => i.done), sections: [{ items: scope.filter(visibleDone).sort(byListOrder), ctx: { flagged: true } }] };
+  }
+  // completed
+  const its = state.items.filter(i => i.done).sort((a, b) => b.doneAt - a.doneAt);
+  return { ...base, doneScope: its, completedView: true, sections: [{ items: its, ctx: null }] };
+}
+/* 在某個項目後面按 Enter 新增時，要沿用的屬性 */
+function ctxFromItem(it){
+  const ctx = { listId: it.listId, sectionId: it.sectionId || null };
+  if (route.name === 'smart'){
+    if (route.key === 'today' || route.key === 'scheduled') ctx.due = { date: it.due && it.due.date >= today() ? it.due.date : today(), time: null };
+    if (route.key === 'flagged') ctx.flagged = true;
+  }
+  return ctx;
+}
+
+/* =====================================================================
+   新增 / 修改
+   ===================================================================== */
+function createItems(parts, ctx, afterId){
+  const listId = (ctx && ctx.listId && listById(ctx.listId)) ? ctx.listId : firstList().id;
+  const l = listById(listId);
+  const sectionId = ctx && secOf(l, ctx.sectionId) ? ctx.sectionId : null;
+  const its = listItems(listId);
+  let pos = its.length;
+  if (afterId){ const k = its.findIndex(i => i.id === afterId); if (k >= 0) pos = k + 1; }
+  const made = parts.map(p => mkItem({ listId, sectionId, title: p.text, done: p.done, due: ctx && ctx.due, flagged: ctx && ctx.flagged, priority: ctx && ctx.priority, notes: p.notes, repeat: ctx && ctx.repeat }));
+  made.forEach(m => { if (m.done) m.doneAt = Date.now(); });
+  its.splice(pos, 0, ...made);
+  its.forEach((it, i) => { it.order = i; });
+  state.items.push(...made);
+  return made;
+}
+/* 貼上的文字裡有「釣魚遊戲：」這種標題行 → 自動變成分類，後面的項目放進去 */
+function createFromSplit(res, baseCtx, afterId, allowSections){
+  const listId = (baseCtx && baseCtx.listId && listById(baseCtx.listId)) ? baseCtx.listId : firstList().id;
+  const l = listById(listId);
+  let ctx = { ...baseCtx, listId }, after = afterId;
+  const made = [], usedSecs = [];
+  for (const x of res){
+    if (x.kind === 'header'){
+      if (!allowSections) continue;
+      let sec = l.sections.find(s => Splitter.key(s.name) === Splitter.key(x.text));
+      if (!sec){ sec = { id: uid(), name: x.text, collapsed: false }; l.sections.push(sec); }
+      sec.collapsed = false;
+      if (!usedSecs.includes(sec)) usedSecs.push(sec);
+      ctx = { ...ctx, sectionId: sec.id }; after = null;
+      continue;
+    }
+    const [m] = createItems([x], ctx, after); made.push(m); after = m.id;
+  }
+  return { made, secs: usedSecs };
+}
+function toggleDone(id){
+  const it = itemById(id); if (!it) return;
+  if (!it.done && it.repeat && it.due){
+    snapshot();
+    const nd = nextDate(it.due.date, it.repeat);
+    it.due.date = nd; it.notified = '';
+    commit();
+    showToast(`已完成，下次：${fmtDay(nd)}`, [{ label: '復原', fn: undo }]);
+    return;
+  }
+  it.done = !it.done; it.doneAt = it.done ? Date.now() : 0;
+  if (it.done){
+    recentDone.set(id, setTimeout(() => { recentDone.delete(id); if (!edit && !dragging && !swiping) render(); }, 1600));
+  } else { clearTimeout(recentDone.get(id)); recentDone.delete(id); }
+  commit();
+}
+function deleteItems(ids, msg){
+  snapshot();
+  state.items = state.items.filter(i => !ids.includes(i.id));
+  if (edit && edit.id && ids.includes(edit.id)) edit = null;
+  commit();
+  showToast(msg, [{ label: '復原', fn: undo }]);
+}
+const trunc = (s, n) => { s = s.replace(/\s+/g, ' '); return s.length > n ? s.slice(0, n) + '…' : s; };
+
+/* ---------- 直接在列表裡編輯（跟 iPhone 一樣） ---------- */
+function startEdit(id, field = 'title'){
+  if (edit) commitEdit({ render: false });
+  const it = itemById(id); if (!it) return;
+  edit = { id, value: it.title, notes: it.notes || '', field, caret: field === 'notes' ? (it.notes || '').length : it.title.length };
+  render();
+}
+function startGhost(afterId, ctx){
+  if (edit) commitEdit({ render: false });
+  const l = ctx && listById(ctx.listId);
+  const sec = l && secOf(l, ctx.sectionId);
+  if (sec && sec.collapsed){ sec.collapsed = false; save(); }
+  edit = { ghost: { afterId: afterId || null, ctx: clone(ctx || {}) }, value: '', notes: '', field: 'title', caret: 0 };
+  render();
+}
+function commitEdit({ next = false, render: doRender = true } = {}){
+  const e = edit; if (!e) return;
+  edit = null;
+  const v = e.value.replace(/\s*\n\s*/g, ' ').trim();
+  const nv = (e.notes || '').replace(/\s+$/, '');
+  let changed = false;
+  if (e.id){
+    const it = itemById(e.id);
+    if (it){
+      if (!v && !nv.trim()){
+        snapshot(); state.items = state.items.filter(i => i !== it); changed = true;
+        showToast('已刪除空白的提醒事項', [{ label: '復原', fn: undo }]);
+      } else {
+        if (v && v !== it.title){ it.title = v; changed = true; }
+        if (nv !== (it.notes || '')){ it.notes = nv; changed = true; }
+        if (next) edit = { ghost: { afterId: it.id, ctx: ctxFromItem(it) }, value: '', notes: '', field: 'title', caret: 0 };
+      }
+    }
+  } else if (v){
+    const [m] = createItems([{ text: v, notes: nv }], e.ghost.ctx, e.ghost.afterId);
+    changed = true;
+    if (next) edit = { ghost: { afterId: m.id, ctx: e.ghost.ctx }, value: '', notes: '', field: 'title', caret: 0 };
+    else flashIds([m.id]);
+  }
+  if (changed) save();
+  if (doRender) render();
+  if (!edit) applyPendingRemote();
+}
+/* 在任何一格貼上多行文字 → 拆成好幾個提醒事項 */
+function handlePaste(e, ta){
+  const t = e.clipboardData && e.clipboardData.getData('text/plain');
+  if (!t || !/[\n\r]|[①-⑳]|\d[.、)]\S.*\s\d[.、)]|、.*、/.test(t) && !/[。；;！？]/.test(t)) return;
+  const s = ta.selectionStart, en = ta.selectionEnd;
+  const combined = ta.value.slice(0, s) + t + ta.value.slice(en);
+  let res = Splitter.split(combined);
+  if (res.filter(x => x.kind === 'item').length + res.filter(x => x.kind === 'header').length < 2) return;
+  if (!res.some(x => x.kind === 'item')) return;
+  e.preventDefault();
+  snapshot();
+  const allowSec = route.name === 'list';
+  let made = [], secs = [];
+  if (edit.id){
+    const it = itemById(edit.id);
+    if (edit.notes !== undefined) it.notes = (edit.notes || '').replace(/\s+$/, '');
+    if (res[0].kind === 'item'){
+      it.title = res[0].text; if (res[0].done && !it.done){ it.done = true; it.doneAt = Date.now(); }
+      const r = createFromSplit(res.slice(1), ctxFromItem(it), it.id, allowSec);
+      made = [it, ...r.made]; secs = r.secs;
+    } else {
+      const r = createFromSplit(res, ctxFromItem(it), it.id, allowSec);
+      made = r.made; secs = r.secs;
+      if (!it.title.trim() && !it.notes.trim()) state.items = state.items.filter(x => x !== it);
+    }
+  } else {
+    const r = createFromSplit(res, edit.ghost.ctx, edit.ghost.afterId, allowSec);
+    made = r.made; secs = r.secs;
+  }
+  const last = made[made.length - 1];
+  edit = last ? { id: last.id, value: last.title, notes: last.notes || '', field: 'title', caret: last.title.length } : null;
+  save(); render(); flashIds(made.map(m => m.id));
+  showToast(`已拆成 ${made.length} 個提醒事項` + (secs.length ? `，${secs.length} 個分類` : ''), [{ label: '復原', fn: undo }]);
+}
+function flashIds(ids){
+  requestAnimationFrame(() => ids.forEach(id => { const el = document.querySelector(`.row[data-id="${id}"]`); if (el) el.classList.add('flash'); }));
+}
+
+/* =====================================================================
+   畫面
+   ===================================================================== */
+function h(tag, props = {}, ...kids){
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})){
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'html') el.innerHTML = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k.startsWith('aria-')) el.setAttribute(k, String(v));
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) el.append(c);
+  return el;
+}
+
+function render(){
+  rendering = true;
+  try {
+    const app = $('#app');
+    app.textContent = '';
+    if (route.name === 'home'){ document.body.classList.remove('inlist'); app.append(renderHome()); }
+    else { document.body.classList.add('inlist'); app.append(renderList()); }
+    renderToolbar();
+    if (edit){
+      const ta = app.querySelector(`textarea[data-edit="${edit.field || 'title'}"]`) || app.querySelector('textarea[data-edit]');
+      if (ta){
+        autoGrow(ta);
+        if (document.activeElement !== ta) ta.focus({ preventScroll: true });
+        const c = Math.min(edit.caret ?? ta.value.length, ta.value.length);
+        try { ta.setSelectionRange(c, c); } catch {}
+        app.querySelectorAll('textarea[data-edit]').forEach(autoGrow);
+        const r = ta.getBoundingClientRect();
+        if (r.top > innerHeight - 60 || r.bottom < 40) ta.closest('.row').scrollIntoView({ block: 'center' });
+      } else {
+        // 正在編輯的項目因為改了日期等原因離開這個畫面：先把文字存起來
+        const e = edit; edit = null;
+        if (e.id){ const it = itemById(e.id); const v = e.value.replace(/\s*\n\s*/g, ' ').trim(); if (it && v && v !== it.title){ it.title = v; save(); } }
+      }
+    }
+  } finally { rendering = false; }
+}
+
+/* ---------- 首頁 ---------- */
+function renderHome(){
+  const v = h('div', { class: 'view' });
+  const sIn = h('input', { type: 'search', placeholder: '搜尋', value: query, 'aria-label': '搜尋提醒事項', enterkeyhint: 'search' });
+  const clr = h('button', { class: 'clr', html: UI.x, 'aria-label': '清除搜尋', hidden: !query });
+  const main = h('div');
+  sIn.addEventListener('input', () => { query = sIn.value; clr.hidden = !query; fillHome(main); });
+  sIn.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); sIn.blur(); } });
+  clr.onclick = () => { query = ''; sIn.value = ''; clr.hidden = true; fillHome(main); };
+  const sl = h(IN_CLAUDE ? 'div' : 'button', { class: 'syncline', id: 'syncline', onclick: IN_CLAUDE ? null : openBackup });
+  paintStatus(sl);
+  v.append(h('div', { class: 'navrow' }), sl, h('div', { class: 'search' }, svgEl(UI.search), sIn, clr), main);
+  fillHome(main);
+  return v;
+}
+function fillHome(main){
+  main.textContent = '';
+  const v = main;
+  const q = query.trim().toLowerCase();
+  if (q){
+    const vm = { showList: true, sortable: false };
+    const its = state.items.filter(i => (i.title + ' ' + i.notes).toLowerCase().includes(q)).sort((a, b) => a.done - b.done || byListOrder(a, b));
+    if (!its.length){ v.append(h('div', { class: 'empty' }, '找不到符合的提醒事項')); return; }
+    const ul = h('ul', { class: 'rows', style: { background: 'var(--card)', borderRadius: '12px', overflow: 'hidden', paddingLeft: '12px' } });
+    its.forEach(it => ul.append(renderRow(it, vm)));
+    v.append(ul);
+    return;
+  }
+  const t = h('div', { class: 'tiles' });
+  for (const k of Object.keys(SMART)){
+    const S = SMART[k];
+    const ic = k === 'today'
+      ? `<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 9.5h17" stroke="currentColor" stroke-width="2"/><text x="12" y="18.2" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="-apple-system,system-ui">${new Date().getDate()}</text></svg>`
+      : UI[S.icon];
+    t.append(h('button', { class: 'tile', onclick: () => go({ name: 'smart', key: k }), 'aria-label': `${S.name}，${smartCount(k)} 項` },
+      h('span', { class: 'ic', style: { background: S.color }, html: ic }),
+      h('span', { class: 'num' }, String(smartCount(k))),
+      h('span', { class: 'nm' }, S.name)));
+  }
+  v.append(t, h('div', { class: 'sechd' }, '我的列表'));
+  const g = h('ul', { class: 'group' });
+  state.lists.forEach(l => {
+    const n = state.items.filter(i => i.listId === l.id && !i.done).length;
+    g.append(h('li', {}, h('button', { class: 'lrow', onclick: () => go({ name: 'list', id: l.id }) },
+      h('span', { class: 'lic', style: { background: colorOf(l) }, html: ICONS[l.icon] || ICONS.list }),
+      h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
+  });
+  v.append(g);
+  if (!state.items.length) v.append(h('p', { class: 'hint', style: { whiteSpace: 'pre-line' } }, '點左下角「新增提醒事項」開始。\n把一大段文字貼進去，會自動拆成一個一個提醒事項。'));
+}
+
+/* ---------- 列表頁 ---------- */
+function renderList(){
+  const vm = viewModel();
+  const v = h('div', { class: 'view' });
+  const allVisible = vm.sections.flatMap(s => s.collapsed ? [] : s.items);
+  const nav = selectMode
+    ? h('div', { class: 'lnav' },
+        h('button', { class: 'navbtn', onclick: () => { if (selectMode.size < allVisible.length) allVisible.forEach(i => selectMode.add(i.id)); else selectMode.clear(); render(); } }, selectMode.size && selectMode.size >= allVisible.length ? '全不選' : '全選'),
+        h('span', { class: 'ttl', style: { opacity: 1 } }, selectMode.size ? `已選取 ${selectMode.size} 項` : '選取提醒事項'),
+        h('button', { class: 'navbtn', style: { fontWeight: 600 }, onclick: () => { selectMode = null; render(); } }, '完成'))
+    : h('div', { class: 'lnav' },
+        h('button', { class: 'navbtn', onclick: () => goHome(), html: UI.back + '<span>列表</span>' }),
+        h('span', { class: 'ttl' }, vm.title),
+        vm.noDoneBar ? h('span') : h('button', { class: 'navbtn', 'aria-label': '更多選項', html: UI.more, onclick: () => openListMenu(vm) }));
+  v.append(nav);
+  v.append(h('h1', { class: 'bigtitle', style: { color: vm.color, cursor: route.name === 'list' ? 'pointer' : '' }, title: route.name === 'list' ? '點一下改名稱' : null, onclick: route.name === 'list' && !selectMode ? () => openListEditor(route.id) : null }, vm.title));
+  // 已完成數量列
+  if (!vm.noDoneBar && !vm.completedView){
+    const n = vm.doneScope.length;
+    v.append(h('div', { class: 'donebar' },
+      h('span', {}, `${n} 個已完成`), h('span', {}, '•'),
+      h('button', { disabled: !n, onclick: () => deleteItems(vm.doneScope.map(i => i.id), `已清除 ${n} 個已完成的提醒事項`) }, '清除'),
+      h('span', { class: 'sp' }),
+      h('button', { disabled: !n && !showDone(), onclick: () => { state.showDone[viewKey()] = !showDone(); commit(); } }, showDone() ? '隱藏' : '顯示')));
+  } else if (vm.completedView){
+    const n = vm.doneScope.length;
+    v.append(h('div', { class: 'donebar' }, h('span', {}, `${n} 個已完成`), h('span', { class: 'sp' }),
+      h('button', { disabled: !n, onclick: () => deleteItems(vm.doneScope.map(i => i.id), `已清除 ${n} 個已完成的提醒事項`) }, '全部清除')));
+  }
+
+  let total = 0, ghostPlaced = false;
+  if (vm.sectioned){ renderSectioned(v, vm); return v; }
+  const secs = vm.sections.slice();
+  // 編輯中的新項目如果落在目前沒顯示的分區（例如「今天」的空分區），補上那個分區
+  if (edit && edit.ghost && !edit.ghost.afterId && edit.ghost.secTitle && !secs.some(s => s.title === edit.ghost.secTitle) && vm.allSections){
+    const s = vm.allSections.find(s => s.title === edit.ghost.secTitle); if (s) secs.push(s);
+  }
+  secs.forEach((s, si) => {
+    const box = h('div', { class: s.title ? 'sec' : '' });
+    if (s.title){
+      const hd = h('h4', { class: s.small ? 'small' : '', style: { color: s.red ? 'var(--red)' : (s.tcolor || '') } }, s.title);
+      if (vm.canAdd && s.ctx) hd.addEventListener('click', () => startGhost(s.items.length ? s.items[s.items.length - 1].id : null, { ...s.ctx }));
+      box.append(hd);
+    }
+    const ul = h('ul', { class: 'rows' });
+    s.items.forEach(it => {
+      total++;
+      ul.append(renderRow(it, vm));
+      if (edit && edit.ghost && edit.ghost.afterId === it.id && !ghostPlaced){ ul.append(renderGhost(vm)); ghostPlaced = true; }
+    });
+    const isTarget = edit && edit.ghost && !ghostPlaced && (
+      (edit.ghost.afterId == null && (edit.ghost.secTitle ? edit.ghost.secTitle === s.title : (edit.ghost.secIndex ?? secs.length - 1) === si)));
+    if (isTarget){ ul.append(renderGhost(vm)); ghostPlaced = true; }
+    if (s.items.length || s.keepEmpty || isTarget || !s.title) box.append(ul);
+    if (s.items.length || s.keepEmpty || isTarget || !s.title) v.append(box);
+  });
+  // 新項目的位置不在畫面上（例如被隱藏）→ 放到最後
+  if (edit && edit.ghost && !ghostPlaced){
+    const ul = h('ul', { class: 'rows' }); ul.append(renderGhost(vm)); v.append(ul);
+  }
+  if (!total && !(edit && edit.ghost)){
+    const msg = vm.completedView ? '沒有已完成的提醒事項' : route.name === 'search' ? '找不到符合的提醒事項' : '沒有提醒事項';
+    v.append(h('div', { class: 'empty' }, msg, vm.canAdd ? h('small', {}, '點一下空白處開始輸入\n貼上一大段文字會自動拆成好幾個') : null));
+  }
+  // 點空白處新增（跟 iPhone 一樣）
+  const tz = h('div', { class: 'tapzone' });
+  if (vm.canAdd){
+    let wasEditing = false;
+    tz.addEventListener('pointerdown', () => { wasEditing = !!edit; });
+    tz.addEventListener('click', () => { if (wasEditing) return; addAtEnd(vm); });
+  }
+  v.append(tz);
+  // 捲動後在頂端顯示小標題
+  requestAnimationFrame(() => onScroll());
+  return v;
+}
+function renderSectioned(v, vm){
+  const l = vm.list;
+  const ul = h('ul', { class: 'rows' });
+  let placed = false;
+  vm.sections.forEach(s => {
+    if (s.secId) ul.append(sectionHeader(s, l));
+    if (s.collapsed) return;
+    s.items.forEach(it => {
+      ul.append(renderRow(it, vm));
+      if (edit && edit.ghost && edit.ghost.afterId === it.id && !placed){ ul.append(renderGhost(vm)); placed = true; }
+    });
+    if (edit && edit.ghost && !placed && !edit.ghost.afterId && (edit.ghost.ctx.sectionId || null) === s.secId){ ul.append(renderGhost(vm)); placed = true; }
+    if (s.secId && !selectMode) ul.append(h('li', { class: 'addrow' }, h('button', { onclick: () => {
+      if (edit) { commitEdit({ render: false }); }
+      startGhost(s.items.length ? s.items[s.items.length - 1].id : null, s.ctx);
+    } }, h('span', { class: 'pl', html: UI.plus }), '新增提醒事項')));
+  });
+  if (edit && edit.ghost && !placed) ul.append(renderGhost(vm));
+  v.append(ul);
+  const tz = h('div', { class: 'tapzone' });
+  let wasEditing = false;
+  tz.addEventListener('pointerdown', () => { wasEditing = !!edit; });
+  tz.addEventListener('click', () => { if (wasEditing || selectMode) return; addAtEnd(vm); });
+  v.append(tz);
+  requestAnimationFrame(() => onScroll());
+}
+function sectionHeader(s, l){
+  const li = h('li', { class: 'shdr' + (s.collapsed ? ' collapsed' : ''), 'data-sec': s.secId });
+  li.append(...[
+    h('button', { class: 'shname', style: { color: colorOf(l) }, onclick: () => openSectionMenu(l, s.sec) }, s.title),
+    s.collapsed && s.openCount ? h('span', { class: 'shcnt' }, String(s.openCount)) : null,
+    h('button', { class: 'shtog', 'aria-label': s.collapsed ? '展開' : '收合', html: UI.down, onclick: () => { s.sec.collapsed = !s.sec.collapsed; commit(); } })].filter(Boolean));
+  return li;
+}
+function addAtEnd(vm){
+  vm = vm || viewModel();
+  if (!vm.canAdd) return;
+  if (route.name === 'list'){ const s = vm.sections[vm.sections.length - 1]; const its = s.items; startGhost(its.length && !s.collapsed ? its[its.length - 1].id : null, s.ctx); return; }
+  if (route.name === 'smart' && route.key === 'all'){ const s = vm.sections[0]; startGhost(s.items.length ? s.items[s.items.length - 1].id : null, s.ctx); return; }
+  if (route.name === 'smart' && route.key === 'today'){
+    if (edit) commitEdit({ render: false });
+    edit = { ghost: { afterId: null, ctx: clone(vm.defaultCtx), secTitle: '全天' }, value: '', caret: 0 }; render(); return;
+  }
+  if (route.name === 'smart' && route.key === 'scheduled'){
+    if (edit) commitEdit({ render: false });
+    edit = { ghost: { afterId: null, ctx: clone(vm.defaultCtx), secTitle: '今天' }, value: '', caret: 0 }; render(); return;
+  }
+  const s = vm.sections[vm.sections.length - 1];
+  startGhost(s && s.items.length ? s.items[s.items.length - 1].id : null, vm.defaultCtx || (s && s.ctx));
+}
+function onScroll(){
+  const nav = document.querySelector('.lnav'); if (!nav) return;
+  nav.classList.toggle('scrolled', scrollY > 44);
+}
+addEventListener('scroll', onScroll, { passive: true });
+
+/* ---------- 一列提醒事項 ---------- */
+function rowMeta(it, vm, isEditing){
+  const meta = h('div', { class: 'meta' });
+  const parts = [];
+  if (it.due){
+    parts.push(h('span', { class: isOverdue(it) ? 'od' : '' }, fmtDue(it.due)));
+    if (it.repeat) parts.push(h('span', { html: UI.repeat, 'aria-label': repeatLabel(it.repeat) }));
+  }
+  if (vm.showList && route.name !== 'list'){
+    const l = listById(it.listId);
+    if (l) parts.push(h('span', { class: 'ln' }, l.name + (secName(it) ? ' › ' + secName(it) : '')));
+  }
+  if (it.by && cloud.me && it.by !== cloud.me){
+    const nm = cloud.nameOf(it.by) || '另一位';
+    const av = cloud.avatarOf(it.by);
+    parts.push(h('span', { class: 'byw' }, av ? h('img', { src: av, alt: '' }) : null, nm + ' 改過'));
+  }
+  parts.forEach((p, i) => { if (i && !(p.firstChild && p.firstChild.nodeName === 'svg')) meta.append(h('span', {}, '·')); meta.append(p); });
+  return parts.length ? meta : null;
+}
+function renderRow(it, vm){
+  const l = listById(it.listId);
+  const c = colorOf(l);
+  const isEditing = !selectMode && edit && edit.id === it.id;
+  const li = h('li', { class: 'row' + (it.done ? ' done' : '') + (isEditing ? ' editing' : '') + (selectMode ? ' selecting' : ''), 'data-id': it.id });
+  li.style.setProperty('--c', c);
+
+  if (selectMode){
+    const on = selectMode.has(it.id);
+    const circle = h('span', { class: 'circle' + (on ? ' sel' : ''), html: '<i></i>' + `<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4 4 9-9"/></svg>` });
+    const t = h('div', { class: 'title' });
+    if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
+    t.append(document.createTextNode(it.title));
+    const txt = h('div', { class: 'rtext' }, t);
+    if (it.notes) txt.append(h('div', { class: 'notes' }, it.notes));
+    const m = rowMeta(it, vm); if (m) txt.append(m);
+    const fg = h('div', { class: 'fg', role: 'checkbox', 'aria-checked': on, tabindex: 0 }, circle, h('div', { class: 'rbody' }, txt, it.flagged ? svgEl(UI.flag, 'flagic') : null));
+    fg.addEventListener('click', () => { if (selectMode.has(it.id)) selectMode.delete(it.id); else selectMode.add(it.id); render(); });
+    li.append(fg);
+    return li;
+  }
+
+  const acts = h('div', { class: 'acts' },
+    h('button', { class: 'a-info', html: UI.info + '<span>詳細資訊</span>', onclick: () => { closeSwipes(); openDetail(it.id); } }),
+    h('button', { class: 'a-copy', html: UI.copy + '<span>複製</span>', onclick: () => { closeSwipes(); openCopy(it.id); } }),
+    h('button', { class: 'a-flag', html: UI.flag + `<span>${it.flagged ? '取消標記' : '標記'}</span>`, onclick: () => { it.flagged = !it.flagged; closeSwipes(); commit(); } }),
+    h('button', { class: 'a-del', html: UI.trash + '<span>刪除</span>', onclick: () => deleteItems([it.id], `已刪除「${trunc(it.title, 12)}」`) }));
+  const circle = h('button', { class: 'circle', role: 'checkbox', 'aria-checked': it.done, 'aria-label': (it.done ? '取消完成：' : '完成：') + it.title, html: '<i></i>' });
+  circle.addEventListener('pointerdown', e => { if (edit) e.preventDefault(); });
+  circle.addEventListener('click', e => { e.stopPropagation(); if (edit) commitEdit({ render: false }); toggleDone(it.id); });
+
+  const txt = h('div', { class: 'rtext' });
+  if (isEditing){
+    txt.append(editor('title'), editor('notes'));
+    const m = rowMeta(it, vm, true); if (m) txt.append(m);
+    txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
+  } else {
+    const t = h('div', { class: 'title' });
+    if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
+    t.append(document.createTextNode(it.title));
+    txt.append(t);
+    if (it.notes) txt.append(h('div', { class: 'notes' }, it.notes));
+    const m = rowMeta(it, vm); if (m) txt.append(m);
+  }
+  const body = h('div', { class: 'rbody' }, txt,
+    it.flagged ? svgEl(UI.flag, 'flagic') : null,
+    isEditing ? h('button', { class: 'infobtn', 'aria-label': '詳細資訊', html: UI.info, onpointerdown: e => e.preventDefault(), onclick: () => { const id = it.id; commitEdit(); openDetail(id); } }) : null);
+  const fg = h('div', { class: 'fg' }, circle, body);
+  li.append(acts, fg);
+  if (!isEditing){
+    body.addEventListener('pointerdown', e => { if (edit) e.preventDefault(); });
+    body.addEventListener('click', e => {
+      if (li.classList.contains('open')){ closeSwipes(); return; }
+      if (document.querySelector('.row.open')){ closeSwipes(); return; }
+      startEdit(it.id, e.target.closest('.notes') ? 'notes' : 'title');
+    });
+  }
+  bindGestures(li, fg, it, vm, isEditing);
+  li.addEventListener('contextmenu', e => e.preventDefault());
+  return li;
+}
+function renderGhost(vm){
+  const ctx = edit.ghost.ctx;
+  const l = listById(ctx.listId) || firstList();
+  const li = h('li', { class: 'row editing', style: {} });
+  li.style.setProperty('--c', colorOf(l));
+  const txt = h('div', { class: 'rtext' }, editor('title'), editor('notes'));
+  const fake = { due: ctx.due, repeat: '', listId: l.id, done: false };
+  const m = rowMeta(fake, vm); if (m) txt.append(m);
+  txt.append(chipsFor({ due: ctx.due, flagged: ctx.flagged }, patch => { Object.assign(ctx, patch); render(); }, () => {
+    const g = edit; const v = g.value.trim();
+    if (v){ edit = null; const [mm] = createItems([{ text: v, notes: (g.notes || '').trim() }], g.ghost.ctx, g.ghost.afterId); save(); render(); openDetail(mm.id); }
+    else { edit = null; render(); openNew({ ...g.ghost.ctx }); }
+  }));
+  const body = h('div', { class: 'rbody' }, txt,
+    ctx.flagged ? svgEl(UI.flag, 'flagic') : null,
+    h('button', { class: 'infobtn', 'aria-label': '詳細資訊', html: UI.info, onpointerdown: e => e.preventDefault(), onclick: () => {
+      const g = edit; const v = g.value.trim();
+      if (v){ edit = null; const [mm] = createItems([{ text: v, notes: (g.notes || '').trim() }], g.ghost.ctx, g.ghost.afterId); save(); render(); openDetail(mm.id); }
+      else { edit = null; render(); openNew({ ...g.ghost.ctx }); }
+    } }));
+  li.append(h('div', { class: 'fg' }, h('span', { class: 'circle' }), body));
+  return li;
+}
+function editor(field){
+  const isNotes = field === 'notes';
+  const ta = h('textarea', { class: isNotes ? 'enotes' : 'etitle', rows: 1, 'data-edit': field,
+    'aria-label': isNotes ? '備忘錄' : '提醒事項標題', enterkeyhint: isNotes ? 'enter' : 'next',
+    placeholder: isNotes ? '備忘錄' : (edit.ghost ? '新增提醒事項' : '') });
+  ta.value = isNotes ? (edit.notes || '') : edit.value;
+  ta.addEventListener('focus', () => { if (edit && edit.field !== field){ edit.field = field; edit.caret = ta.selectionStart; } });
+  ta.addEventListener('input', () => {
+    if (!edit) return;
+    if (isNotes) edit.notes = ta.value; else edit.value = ta.value;
+    edit.caret = ta.selectionStart; autoGrow(ta);
+    // 部分手機鍵盤貼上時沒有 clipboardData：用內容判斷
+    if (!isNotes && /\n/.test(ta.value)){ const parts = Splitter.items(ta.value); if (parts.length >= 2){ const v = ta.value; const fakeEvt = { clipboardData: { getData: () => v }, preventDefault(){} }; ta.value = ''; edit.value = ''; handlePaste(fakeEvt, ta); } }
+  });
+  ta.addEventListener('select', () => { if (edit) edit.caret = ta.selectionStart; });
+  if (!isNotes) ta.addEventListener('paste', e => handlePaste(e, ta));
+  ta.addEventListener('keydown', e => {
+    if (e.isComposing || e.keyCode === 229) return;   // 中文輸入法選字中
+    if (e.key === 'Escape'){ e.preventDefault(); ta.blur(); return; }
+    if (isNotes) return;                               // 備忘錄可以自由換行
+    if (e.key === 'Enter' && !e.shiftKey){
+      e.preventDefault();
+      if (edit && edit.ghost && !ta.value.trim()) commitEdit();
+      else commitEdit({ next: true });
+    } else if (e.key === 'Backspace' && !ta.value && edit && edit.ghost){ e.preventDefault(); commitEdit(); }
+  });
+  ta.addEventListener('blur', () => {
+    if (rendering) return;
+    const token = edit;
+    setTimeout(() => {
+      const a = document.activeElement;
+      if (edit && edit === token && !(a && a.matches && a.matches('textarea[data-edit]'))) commitEdit();
+    }, 0);
+  });
+  return ta;
+}
+function chipsFor(cur, onPatch, onMore){
+  const t = today(), tm = addDays(t, 1), we = weekendDate();
+  const d = cur.due && cur.due.date;
+  const keep = e => e.preventDefault();
+  const mk = (label, date) => h('button', { class: 'chip' + (d === date ? ' on' : ''), onpointerdown: keep,
+    onclick: () => onPatch({ due: d === date ? null : { date, time: (cur.due && cur.due.time) || null } }) }, label);
+  const box = h('div', { class: 'chips' },
+    mk('今天', t), mk('明天', tm), mk('本週末', we),
+    h('button', { class: 'chip' + (d && d !== t && d !== tm && d !== we ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm && d !== we ? fmtDay(d) : '日期與時間') + '</span>', onpointerdown: keep, onclick: onMore }),
+    h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag, 'aria-label': cur.flagged ? '取消標記' : '標記', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
+  if (cur.item){
+    const it = cur.item;
+    const sn = secName(it);
+    box.append(
+      h('button', { class: 'chip', html: UI.folder + `<span>${sn ? sn : '分類'}</span>`, onpointerdown: keep, onclick: () => { commitEdit(); openMove([it.id]); } }),
+      h('button', { class: 'chip', html: UI.copy + '<span>複製</span>', onpointerdown: keep, onclick: () => { commitEdit(); openCopy(it.id); } }));
+  }
+  return box;
+}
+function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+
+/* ---------- 工具列 ---------- */
+function renderToolbar(){
+  const box = $('#toolbarIn'); box.textContent = '';
+  if (route.name === 'home'){
+    box.append(
+      h('button', { class: 'newbtn', onclick: () => openNew({}) }, h('span', { class: 'pl', html: UI.plus }), '新增提醒事項'),
+      h('button', { class: 'addlist', onclick: () => openListEditor(null) }, '新增列表'));
+    return;
+  }
+  if (selectMode){
+    const ids = [...selectMode].filter(id => itemById(id));
+    const n = ids.length;
+    box.append(h('div', { class: 'selbar' },
+      h('button', { disabled: !n, onclick: () => openMove(ids) }, '移動'),
+      h('button', { disabled: !n, onclick: () => copyItems(ids) }, '複製'),
+      h('span', {}, n ? `${n} 項` : ''),
+      h('button', { disabled: !n, onclick: () => { const done = ids.every(id => itemById(id).done); snapshot(); ids.forEach(id => { const x = itemById(id); x.done = !done; x.doneAt = x.done ? Date.now() : 0; }); selectMode = null; commit(); showToast(done ? `已取消完成 ${n} 項` : `已完成 ${n} 項`, [{ label: '復原', fn: undo }]); } }, '完成'),
+      h('button', { class: 'red', disabled: !n, onclick: () => { selectMode = null; deleteItems(ids, `已刪除 ${n} 項`); } }, '刪除')));
+    return;
+  }
+  const vm = viewModel();
+  const color = route.name === 'list' ? colorOf(listById(route.id)) : (route.name === 'smart' ? SMART[route.key].color : 'var(--blue)');
+  const b = h('button', { class: 'newbtn', style: { color }, disabled: !vm.canAdd }, h('span', { class: 'pl', html: UI.plus }), '新增提醒事項');
+  let wasEmptyGhost = false;
+  b.addEventListener('pointerdown', e => { wasEmptyGhost = !!(edit && edit.ghost && !edit.value.trim()); if (wasEmptyGhost) e.preventDefault(); });
+  b.addEventListener('click', () => { if (wasEmptyGhost) return; addAtEnd(); });
+  box.append(b, route.name === 'list' ? h('button', { class: 'addlist', onclick: () => openSectionName(listById(route.id), null) }, '新增分類') : h('span'));
+}
+
+/* ---------- 換頁 ---------- */
+function go(r){
+  if (edit) commitEdit({ render: false });
+  if (route.name === 'home') render.homeY = scrollY;
+  route = r; selectMode = null; closeSwipes(); render(); scrollTo(0, 0);
+}
+function goHome(){
+  if (edit) commitEdit({ render: false });
+  route = { name: 'home' }; selectMode = null; render(); scrollTo(0, render.homeY || 0);
+}
+
+/* =====================================================================
+   滑動（左滑）與長按拖曳排序
+   ===================================================================== */
+const ACTW = 272;
+let suppressUntil = 0;
+document.addEventListener('click', e => { if (Date.now() < suppressUntil){ e.stopPropagation(); e.preventDefault(); } }, true);
+document.addEventListener('touchmove', e => { if (dragging || swiping) e.preventDefault(); }, { passive: false });
+function closeSwipes(except){
+  document.querySelectorAll('.row.open').forEach(r => { if (r !== except){ r.classList.remove('open'); r.querySelector('.fg').style.transform = ''; } });
+}
+document.addEventListener('pointerdown', e => { if (!e.target.closest('.row.open')) closeSwipes(); }, true);
+
+function bindGestures(li, fg, it, vm, isEditing){
+  fg.addEventListener('pointerdown', e => {
+    if (isEditing || selectMode || (e.button !== undefined && e.button > 0)) return;
+    if (e.target.closest('textarea,.circle,.infobtn,.chip')) return;
+    const sx = e.clientX, sy = e.clientY, pid = e.pointerId;
+    const base = li.classList.contains('open') ? -ACTW : 0;
+    let mode = null, x = base, lp = null;
+    if (vm.sortable && !edit) lp = setTimeout(() => { if (!mode){ mode = 'drag'; cleanup(); beginDrag(li, sy, pid); } }, 430);
+    const move = ev => {
+      if (ev.pointerId !== pid || mode === 'drag') return;
+      const dx = ev.clientX - sx, dy = ev.clientY - sy;
+      if (!mode && (Math.abs(dx) > 8 || Math.abs(dy) > 8)){
+        clearTimeout(lp);
+        if (Math.abs(dx) > Math.abs(dy) * 1.2 && !edit){ mode = 'swipe'; swiping = true; li.classList.add('swiping'); closeSwipes(li); }
+        else mode = 'scroll';
+      }
+      if (mode === 'swipe'){
+        x = Math.min(0, base + dx);
+        if (x > 0) x = 0;
+        fg.style.transform = `translateX(${x}px)`;
+        const w = li.offsetWidth;
+        li.querySelector('.acts').style.width = Math.max(-x, 0) + 'px';
+        li.classList.toggle('full', x < -w * 0.62);
+      }
+    };
+    const up = ev => {
+      if (ev.pointerId !== pid) return;
+      clearTimeout(lp); cleanup();
+      if (mode === 'swipe'){
+        suppressUntil = Date.now() + 350;
+        swiping = false; li.classList.remove('swiping');
+        const acts = li.querySelector('.acts');
+        if (li.classList.contains('full')){
+          fg.style.transform = `translateX(${-li.offsetWidth}px)`; acts.style.width = li.offsetWidth + 'px';
+          setTimeout(() => deleteItems([it.id], `已刪除「${trunc(it.title, 12)}」`), 180);
+        } else if (x < -60){
+          li.classList.add('open'); fg.style.transform = `translateX(${-ACTW}px)`; acts.style.width = ACTW + 'px';
+        } else {
+          li.classList.remove('open'); fg.style.transform = ''; acts.style.width = '';
+        }
+        applyPendingRemote();
+      }
+    };
+    const cleanup = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  });
+}
+
+function beginDrag(li, startY, pid){
+  const ul = li.parentElement;
+  const OB = '.row[data-id], .shdr';
+  dragging = true;
+  closeSwipes();
+  try { navigator.vibrate && navigator.vibrate(12); } catch {}
+  li.classList.add('dragging');
+  const offY = startY - li.getBoundingClientRect().top;
+  let y = startY, raf = 0, sraf = 0, moved = false;
+  const prevOb = el => { let p = el.previousElementSibling; while (p && !p.matches(OB)) p = p.previousElementSibling; return p; };
+  const nextOb = el => { let n = el.nextElementSibling; while (n && !n.matches(OB)) n = n.nextElementSibling; return n; };
+  const place = () => {
+    raf = 0;
+    li.style.transform = 'none';
+    let prev = prevOb(li);
+    while (prev){
+      const r = prev.getBoundingClientRect();
+      if (y - offY < r.top + r.height / 2){ ul.insertBefore(prev, li.nextElementSibling); prev = prevOb(li); moved = true; } else break;
+    }
+    let next = nextOb(li);
+    while (next){
+      const r = next.getBoundingClientRect();
+      if (y - offY + li.offsetHeight > r.top + r.height / 2){ ul.insertBefore(next, li); next = nextOb(li); moved = true; } else break;
+    }
+    li.style.transform = `translateY(${y - offY - li.getBoundingClientRect().top}px)`;
+  };
+  const auto = () => {
+    let dy = 0;
+    if (y < 110) dy = -Math.ceil((110 - y) / 7);
+    else if (y > innerHeight - 90) dy = Math.ceil((y - (innerHeight - 90)) / 7);
+    if (dy){ scrollBy(0, dy); place(); }
+    sraf = requestAnimationFrame(auto);
+  };
+  sraf = requestAnimationFrame(auto);
+  const move = ev => { if (ev.pointerId !== pid) return; y = ev.clientY; if (!raf) raf = requestAnimationFrame(place); };
+  const end = ev => {
+    if (ev.pointerId !== pid) return;
+    removeEventListener('pointermove', move); removeEventListener('pointerup', end); removeEventListener('pointercancel', end);
+    cancelAnimationFrame(raf); cancelAnimationFrame(sraf);
+    li.classList.remove('dragging'); li.style.transform = '';
+    dragging = false;
+    suppressUntil = Date.now() + 350;
+    if (moved){
+      // 依畫面順序決定每一項屬於哪個分類
+      let cur = null; const vis = []; const secMap = new Map();
+      [...ul.children].forEach(el => {
+        if (el.matches('.shdr')) cur = el.dataset.sec || null;
+        else if (el.matches('.row[data-id]')){ vis.push(el.dataset.id); secMap.set(el.dataset.id, cur); }
+      });
+      const all = listItems(route.id);
+      const visSet = new Set(vis);
+      const slots = all.map((it, i) => visSet.has(it.id) ? i : -1).filter(i => i >= 0);
+      const res = all.slice();
+      slots.forEach((slot, k) => { res[slot] = itemById(vis[k]); });
+      res.forEach((it, i) => { it.order = i; if (secMap.has(it.id)) it.sectionId = secMap.get(it.id); });
+      commit();
+    } else render();
+    applyPendingRemote();
+  };
+  addEventListener('pointermove', move); addEventListener('pointerup', end); addEventListener('pointercancel', end);
+}
+
+/* =====================================================================
+   底部面板
+   ===================================================================== */
+let sheetClose = null;
+const sheetOpen = () => $('#sheet').classList.contains('show');
+function openSheet({ title, left = '取消', right = '完成', onLeft, onRight, body, rightDisabled = false }){
+  if (edit) commitEdit();
+  hideToast();
+  $('#sheetTitle').textContent = title;
+  const L = $('#sheetL'), R = $('#sheetR');
+  L.textContent = left || ''; L.style.visibility = left ? '' : 'hidden'; L.onclick = () => { closeSheet(); onLeft && onLeft(); };
+  R.textContent = right || ''; R.style.visibility = right ? '' : 'hidden'; R.disabled = rightDisabled; R.onclick = () => { if (onRight && onRight() === false) return; closeSheet(); };
+  const b = $('#sheetBody'); b.textContent = ''; b.append(body); b.scrollTop = 0;
+  $('#backdrop').classList.add('show'); $('#sheet').classList.add('show');
+  sheetClose = onLeft || null;
+}
+function closeSheet(){
+  $('#backdrop').classList.remove('show'); $('#sheet').classList.remove('show');
+  setTimeout(applyPendingRemote, 350);
+}
+$('#backdrop').onclick = () => { closeSheet(); sheetClose && sheetClose(); };
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && sheetOpen()){ closeSheet(); } });
+
+/* ---------- 詳細資訊／新增提醒事項 ---------- */
+function reminderForm(w, { isNew, onChange }){
+  const wrap = h('div');
+  const title = h('textarea', { class: 'tt', rows: 1, placeholder: '標題', 'aria-label': '標題' });
+  title.value = w.title;
+  const notes = h('textarea', { rows: 2, placeholder: '備忘錄', 'aria-label': '備忘錄' });
+  notes.value = w.notes;
+  const split = h('div', { class: 'splitnote', hidden: true });
+  const refreshSplit = () => {
+    if (!isNew) return;
+    const res = /\n|[①-⑳]|[。；;！？]/.test(w.title) ? Splitter.split(w.title) : [];
+    const nItems = res.filter(x => x.kind === 'item').length, heads = res.filter(x => x.kind === 'header');
+    w.res = (nItems >= 2 || (nItems >= 1 && heads.length)) ? res : null;
+    w.parts = w.res ? res.filter(x => x.kind === 'item') : null;
+    split.hidden = !w.res;
+    if (w.res){
+      split.innerHTML = '';
+      split.append(h('span', {}, '會拆成 ', h('b', {}, `${nItems} 個提醒事項`), heads.length ? `，放進 ${heads.length} 個分類` : '', '，都套用下面的日期和旗標'));
+      const ol = h('ol', {});
+      res.forEach(x => ol.append(x.kind === 'header' ? h('li', { style: { listStyle: 'none', marginLeft: '-20px', fontWeight: 700, marginTop: '6px', color: 'var(--blue)' } }, '📁 ' + x.text) : h('li', {}, x.text)));
+      split.append(ol);
+    }
+    onChange && onChange();
+  };
+  title.addEventListener('input', () => { w.title = title.value; autoGrow(title); refreshSplit(); });
+  notes.addEventListener('input', () => { w.notes = notes.value; autoGrow(notes); });
+  wrap.append(h('div', { class: 'fgroup' }, title, notes), split);
+
+  // 日期與時間
+  const dateSw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': '日期' }); dateSw.checked = !!w.due;
+  const timeSw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': '時間' }); timeSw.checked = !!(w.due && w.due.time);
+  const dateIn = h('input', { type: 'date', 'aria-label': '選擇日期' });
+  const timeIn = h('input', { type: 'time', 'aria-label': '選擇時間' });
+  const dSmall = h('small'), tSmall = h('small');
+  const dateRow = h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--red)' }, html: UI.cal }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '日期', dSmall), dateSw));
+  const dateEdit = h('div', { class: 'f' }, h('span', { class: 'fin', style: { justifyContent: 'flex-end' } }, dateIn));
+  const timeRow = h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--blue)' }, html: UI.clock }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '時間', tSmall), timeSw));
+  const timeEdit = h('div', { class: 'f' }, h('span', { class: 'fin', style: { justifyContent: 'flex-end' } }, timeIn));
+  const repSel = h('select', { 'aria-label': '重複' }, ...REPEATS.map(([v, t]) => h('option', { value: v }, t)));
+  const repRow = h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--grey)' }, html: UI.repeat }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '重複'), repSel, svgEl(UI.chev)));
+  const syncDT = () => {
+    dateSw.checked = !!w.due; timeSw.checked = !!(w.due && w.due.time);
+    dateEdit.hidden = !w.due; timeRow.hidden = !w.due; timeEdit.hidden = !(w.due && w.due.time); repRow.hidden = !w.due;
+    if (w.due){ dateIn.value = w.due.date; dSmall.textContent = fmtDay(w.due.date); dSmall.className = isOverdue({ due: w.due, done: false }) ? 'od' : ''; }
+    else dSmall.textContent = '';
+    if (w.due && w.due.time){ timeIn.value = w.due.time; tSmall.textContent = fmtTime(w.due.time); tSmall.className = dSmall.className; } else tSmall.textContent = '';
+    repSel.value = w.repeat || '';
+  };
+  dateSw.onchange = () => { w.due = dateSw.checked ? { date: today(), time: null } : null; if (!w.due) w.repeat = ''; syncDT(); };
+  timeSw.onchange = () => {
+    if (!w.due) w.due = { date: today(), time: null };
+    if (timeSw.checked){ const n = new Date(); n.setHours(n.getHours() + 1, 0, 0, 0); if (n.getDate() !== new Date().getDate() && w.due.date === today()) w.due.date = ymd(n); w.due.time = `${pad(n.getHours())}:00`; }
+    else w.due.time = null;
+    syncDT();
+  };
+  dateIn.onchange = () => { if (dateIn.value){ w.due.date = dateIn.value; syncDT(); } };
+  timeIn.onchange = () => { if (timeIn.value){ w.due.time = timeIn.value; syncDT(); } };
+  repSel.onchange = () => { w.repeat = repSel.value; };
+  wrap.append(h('div', { class: 'fgroup' }, dateRow, dateEdit, timeRow, timeEdit, repRow));
+
+  // 旗標、優先順序、列表
+  const flagSw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': '旗標' }); flagSw.checked = !!w.flagged;
+  flagSw.onchange = () => { w.flagged = flagSw.checked; };
+  const priSel = h('select', { 'aria-label': '優先順序' }, ...[['0', '無'], ['1', '低'], ['2', '中'], ['3', '高']].map(([v, t]) => h('option', { value: v }, t)));
+  priSel.value = String(w.priority || 0); priSel.onchange = () => { w.priority = Number(priSel.value); };
+  const listSel = h('select', { 'aria-label': '列表' }, ...state.lists.map(l => h('option', { value: l.id }, l.name)));
+  const secSel = h('select', { 'aria-label': '分類' });
+  const secRow = h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--grey)' }, html: UI.folder }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '分類'), secSel, svgEl(UI.chev)));
+  const fillSec = () => {
+    const l = listById(w.listId);
+    secSel.textContent = '';
+    secSel.append(h('option', { value: '' }, '未分類'), ...((l && l.sections) || []).map(s => h('option', { value: s.id }, s.name)));
+    if (!secOf(l, w.sectionId)) w.sectionId = null;
+    secSel.value = w.sectionId || '';
+    secRow.hidden = !(l && l.sections && l.sections.length);
+  };
+  secSel.onchange = () => { w.sectionId = secSel.value || null; };
+  listSel.value = w.listId; listSel.onchange = () => { w.listId = listSel.value; fillSec(); };
+  wrap.append(h('div', { class: 'fgroup' },
+    h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--orange)' }, html: UI.flag }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '旗標'), flagSw)),
+    h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--red)' }, html: UI.excl }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '優先順序'), priSel, svgEl(UI.chev))),
+    h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: colorOf(listById(w.listId)) }, html: ICONS.list }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '列表'), listSel, svgEl(UI.chev))),
+    secRow));
+  fillSec();
+  syncDT();
+  setTimeout(() => { autoGrow(title); autoGrow(notes); }, 0);
+  return { el: wrap, title };
+}
+function openDetail(id){
+  const it = itemById(id); if (!it) return;
+  const w = clone(it);
+  const f = reminderForm(w, { isNew: false });
+  f.el.append(h('div', { class: 'fgroup' }, h('button', { class: 'del', onclick: () => { closeSheet(); deleteItems([it.id], `已刪除「${trunc(it.title, 12)}」`); } }, '刪除提醒事項')));
+  openSheet({ title: '詳細資訊', body: f.el, onRight: () => {
+    const cur = itemById(id); if (!cur) return;
+    const t = w.title.replace(/\s*\n\s*/g, ' ').trim();
+    if (!t){ deleteItems([id], '標題空白，已刪除'); return; }
+    const dueChanged = JSON.stringify(cur.due) !== JSON.stringify(w.due);
+    if (w.listId !== cur.listId){ cur.order = listItems(w.listId).length; }
+    const sid = secOf(listById(w.listId), w.sectionId) ? w.sectionId : null;
+    Object.assign(cur, { title: t, notes: w.notes.replace(/\s+$/, ''), due: w.due, repeat: w.due ? w.repeat : '', flagged: w.flagged, priority: w.priority, listId: w.listId, sectionId: sid });
+    if (dueChanged) cur.notified = '';
+    commit();
+  } });
+}
+function openNew(ctx){
+  const listId = (ctx.listId && listById(ctx.listId)) ? ctx.listId : (route.name === 'list' ? route.id : firstList().id);
+  const w = { title: '', notes: '', due: ctx.due ? clone(ctx.due) : null, repeat: '', flagged: !!ctx.flagged, priority: 0, listId, sectionId: ctx.sectionId || null, parts: null, res: null };
+  const R = () => $('#sheetR');
+  const f = reminderForm(w, { isNew: true, onChange: () => { R().disabled = !w.title.trim(); R().textContent = w.parts ? `加入 ${w.parts.length} 個` : '加入'; } });
+  openSheet({ title: '新增提醒事項', right: '加入', rightDisabled: true, body: f.el, onRight: () => {
+    if (!w.title.trim()) return false;
+    snapshot();
+    const baseCtx = { listId: w.listId, sectionId: w.sectionId, due: w.due, flagged: w.flagged, priority: w.priority, repeat: w.due ? w.repeat : '' };
+    const made = w.res ? createFromSplit(w.res, baseCtx, null, true).made
+      : createItems([{ text: w.title.replace(/\s*\n\s*/g, ' ').trim(), notes: w.notes.replace(/\s+$/, '') }], baseCtx, null);
+    if (w.res && w.notes.trim()) made.forEach(m => { m.notes = w.notes.trim(); });
+    commit(); flashIds(made.map(m => m.id));
+    const l = listById(w.listId);
+    showToast(made.length > 1 ? `已在「${trunc(l.name, 8)}」加入 ${made.length} 個` : `已加入「${trunc(l.name, 10)}」`, [{ label: '復原', fn: undo }]);
+  } });
+  try { f.title.focus({ preventScroll: true }); } catch {}
+}
+
+/* ---------- 列表設定 ---------- */
+function openListEditor(id){
+  const l = id ? listById(id) : null;
+  const w = l ? { name: l.name, color: l.color, icon: l.icon } : { name: '', color: COLOR_KEYS[[5, 0, 1, 3, 8, 9, 2, 6, 7, 4, 10, 11][state.lists.length % 12]], icon: 'list' };
+  const big = h('div', { class: 'bigic' });
+  const name = h('input', { class: 'lname-in', placeholder: '列表名稱', maxlength: 40, 'aria-label': '列表名稱', enterkeyhint: 'done' });
+  name.value = w.name;
+  const sw = h('div', { class: 'swatches' }), ic = h('div', { class: 'icons' });
+  const paint = () => {
+    big.style.background = COLORS[w.color]; big.innerHTML = ICONS[w.icon]; name.style.color = COLORS[w.color];
+    sw.querySelectorAll('.sw').forEach(b => b.classList.toggle('on', b.dataset.c === w.color));
+    ic.querySelectorAll('.icn').forEach(b => b.classList.toggle('on', b.dataset.i === w.icon));
+    $('#sheetR').disabled = !w.name.trim();
+  };
+  COLOR_KEYS.forEach(k => sw.append(h('button', { class: 'sw', 'data-c': k, 'aria-label': '顏色 ' + k, style: { background: COLORS[k] }, onclick: () => { w.color = k; paint(); } })));
+  ICON_KEYS.forEach(k => ic.append(h('button', { class: 'icn', 'data-i': k, 'aria-label': '圖示 ' + k, html: ICONS[k], onclick: () => { w.icon = k; paint(); } })));
+  name.addEventListener('input', () => { w.name = name.value; paint(); });
+  name.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter'){ e.preventDefault(); $('#sheetR').click(); } });
+  const body = h('div', {}, h('div', { class: 'fgroup', style: { padding: '8px 16px 18px' } }, big, name), h('div', { class: 'fgroup' }, sw), h('div', { class: 'fgroup' }, ic));
+  openSheet({ title: l ? '列表資訊' : '新增列表', body, rightDisabled: !w.name.trim(), onRight: () => {
+    if (!w.name.trim()) return false;
+    if (l){ Object.assign(l, { name: w.name.trim(), color: w.color, icon: w.icon }); commit(); }
+    else { const nl = { id: uid(), name: w.name.trim(), color: w.color, icon: w.icon }; state.lists.push(nl); route = { name: 'list', id: nl.id }; commit(); scrollTo(0, 0); }
+  } });
+  paint();
+  if (!l){ try { name.focus({ preventScroll: true }); } catch {} }
+}
+/* ---------- 備份／還原（放在 GitHub 時資料只存在手機裡，記得偶爾備份） ---------- */
+function backupText(){ const d = clone(state); d.exportedAt = new Date().toISOString(); return JSON.stringify(d, null, 1); }
+function importText(text){
+  let r = null;
+  try { r = migrate(JSON.parse(text)); } catch {}
+  if (!r){ showToast('看不懂這份備份，請確認內容完整'); return false; }
+  snapshot();
+  state = r; edit = null; selectMode = null; route = { name: 'home' };
+  commit();
+  showToast(`已還原 ${r.items.length} 個提醒事項`, [{ label: '復原', fn: undo }]);
+  return true;
+}
+function openBackup(){
+  const n = state.items.length;
+  const I = (icon, label, fn) => h('li', {}, h('button', { html: icon + `<span>${label}</span>`, onclick: fn }));
+  const file = h('input', { type: 'file', accept: '.json,application/json,text/plain', style: { display: 'none' } });
+  file.onchange = () => { const f = file.files && file.files[0]; if (!f) return; f.text().then(t => { closeSheet(); importText(t); }); };
+  const ymdNow = ymd(new Date());
+  const body = h('div', {},
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 14px' } }, `目前有 ${state.lists.length} 個列表、${n} 個提醒事項，都存在這支手機的瀏覽器裡。換手機或清除瀏覽器資料前，先備份一下。`),
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
+      I(UI.down, '下載備份檔', () => {
+        try {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([backupText()], { type: 'application/json' }));
+          a.download = `一格記事備份-${ymdNow}.json`;
+          document.body.append(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          closeSheet(); showToast('已下載備份檔');
+        } catch { closeSheet(); doCopy(backupText(), '備份文字'); }
+      }),
+      I(UI.copy, '複製備份文字', () => { closeSheet(); doCopy(backupText(), '備份文字'); }))),
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
+      I(UI.folder, '從備份檔還原', () => file.click()),
+      I(UI.pencil, '貼上備份文字還原', () => { closeSheet(); setTimeout(openPasteRestore, 330); }))),
+    file);
+  openSheet({ title: '備份／還原', left: '', right: '完成', body });
+}
+function openPasteRestore(){
+  const ta = h('textarea', { class: 'copyfb', placeholder: '把之前複製的備份文字貼在這裡' });
+  ta.addEventListener('input', () => { $('#sheetR').disabled = !ta.value.trim(); });
+  openSheet({ title: '貼上備份文字', right: '還原', rightDisabled: true, body: h('div', {}, ta, h('p', { class: 'cfm', style: { fontSize: '13px', marginTop: '10px' } }, '還原會換掉目前的內容，還原後可以按「復原」改回來。')),
+    onRight: () => { if (!importText(ta.value)) return false; } });
+}
+function openShareHelp(){
+  const step = (n, t, d) => h('div', { class: 'f', style: { alignItems: 'flex-start', padding: '12px 14px', gap: '12px' } },
+    h('span', { class: 'fic', style: { background: 'var(--blue)', borderRadius: '50%', fontWeight: 700, fontSize: '15px' } }, String(n)),
+    h('span', { style: { flex: 1 } }, h('b', {}, t), h('div', { style: { color: 'var(--label2)', fontSize: '15px', marginTop: '2px', lineHeight: 1.45 } }, d)));
+  const st = cloud.status;
+  const body = h('div', {},
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 14px' } },
+      st === 'readonly' ? '你現在只能看，不能修改：請擁有者在「分享」裡把你的權限改成可以編輯。'
+      : st === 'local' ? '目前沒有登入雲端，資料只存在這台裝置。'
+      : '兩個人看到的是同一份：任何一邊新增、修改、打勾或刪除，另一邊幾秒內就會更新。'),
+    h('div', { class: 'fgroup' },
+      step(1, '按右上角的「分享」', '在這個 App 的上方（Claude 的標題列），不是在 App 裡面。'),
+      step(2, '輸入對方的 Email 邀請', '權限要選「可以編輯」那一種（例如「編輯者」或「參與者」）。只用公開連結分享的話，對方只能看、不能改。'),
+      step(3, '對方登入 Claude 打開連結', '對方要用被邀請的那個 Email 登入。打開後首頁上方會顯示「和 ○○ 共用」。')),
+    h('p', { class: 'cfm', style: { fontSize: '13px', textAlign: 'left', margin: '0 4px' } }, '小提醒：到時間跳出的提醒是各自的，只會在開著 App 的那支手機跳出來。'));
+  openSheet({ title: '兩個人一起用', left: '', right: '完成', body });
+}
+function openListMenu(vm){
+  const items = [];
+  const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
+  const later = fn => () => setTimeout(fn, 330);
+  const allVisible = vm.sections.flatMap(s => s.items);
+  if (allVisible.length) items.push(I(UI.select, '選取提醒事項', () => { selectMode = new Set(); render(); }));
+  if (route.name === 'list') items.push(I(UI.section, '新增分類', later(() => openSectionName(listById(route.id), null))));
+  if (allVisible.length) items.push(I(UI.copy, '複製整個列表的文字', () => copyItems(allVisible.map(i => i.id), true)));
+  if (route.name === 'list') items.push(I(UI.pencil, '列表資訊', later(() => openListEditor(route.id))));
+  if (!vm.completedView) items.push(I(UI.eye, showDone() ? '隱藏已完成' : '顯示已完成', () => { state.showDone[viewKey()] = !showDone(); commit(); }));
+  if (route.name === 'list') items.push(I(UI.trash, '刪除列表', later(confirmDeleteList), 'red'));
+  openSheet({ title: vm.title, left: '', right: '完成', body: h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)) });
+}
+/* ---------- 分類 ---------- */
+function openSectionName(l, sec){
+  if (!l) return;
+  const inp = h('input', { class: 'lname-in', placeholder: '分類名稱（例如：工作）', maxlength: 40, 'aria-label': '分類名稱', enterkeyhint: 'done', style: { fontSize: '18px' } });
+  inp.value = sec ? sec.name : '';
+  const sugg = h('div', { class: 'chips', style: { justifyContent: 'center', flexWrap: 'wrap', marginTop: '14px' } },
+    ...(sec ? [] : ['工作', '生活', '購物', '遊戲', '學習', '待辦'].filter(n => !l.sections.some(s => s.name === n)).map(n => h('button', { class: 'chip', onclick: () => { inp.value = n; inp.dispatchEvent(new Event('input')); } }, n))));
+  inp.addEventListener('input', () => { $('#sheetR').disabled = !inp.value.trim(); });
+  inp.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter'){ e.preventDefault(); $('#sheetR').click(); } });
+  openSheet({ title: sec ? '重新命名分類' : '新增分類', right: sec ? '完成' : '新增', rightDisabled: !inp.value.trim(),
+    body: h('div', {}, h('div', { class: 'fgroup', style: { padding: '16px' } }, inp, sugg),
+      sec ? null : h('p', { class: 'cfm', style: { fontSize: '14px' } }, '小技巧：貼上的文字如果有「工作：」這種標題行，會自動建立分類。')),
+    onRight: () => {
+      const name = inp.value.trim(); if (!name) return false;
+      if (sec){ sec.name = name; commit(); }
+      else {
+        const s = { id: uid(), name, collapsed: false };
+        l.sections.push(s);
+        if (route.name !== 'list' || route.id !== l.id){ route = { name: 'list', id: l.id }; }
+        save();
+        startGhost(null, { listId: l.id, sectionId: s.id });
+      }
+    } });
+  try { inp.focus({ preventScroll: true }); } catch {}
+}
+function openSectionMenu(l, sec){
+  const idx = l.sections.indexOf(sec);
+  const n = state.items.filter(i => i.listId === l.id && i.sectionId === sec.id).length;
+  const I = (icon, label, fn, cls = '', dis = false) => h('li', {}, h('button', { class: cls, disabled: dis, html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
+  const later = fn => () => setTimeout(fn, 330);
+  const items = [
+    I(UI.plus.replace('stroke-width="3.4"', 'stroke-width="2.2"'), '在這個分類新增', () => { const its = listItems(l.id).filter(i => i.sectionId === sec.id && visibleDone(i)); startGhost(its.length ? its[its.length - 1].id : null, { listId: l.id, sectionId: sec.id }); }),
+    I(UI.pencil, '重新命名', later(() => openSectionName(l, sec))),
+    I(UI.copy, '複製這個分類的文字', () => copyItems(listItems(l.id).filter(i => i.sectionId === sec.id).map(i => i.id), true), '', !n),
+    I(UI.down.replace('m5 9 7 7 7-7', 'm5 15 7-7 7 7'), '往上移', () => { l.sections.splice(idx, 1); l.sections.splice(idx - 1, 0, sec); commit(); }, '', idx <= 0),
+    I(UI.down, '往下移', () => { l.sections.splice(idx, 1); l.sections.splice(idx + 1, 0, sec); commit(); }, '', idx >= l.sections.length - 1),
+    I(UI.section, '刪除分類（保留提醒事項）', () => { snapshot(); state.items.forEach(i => { if (i.listId === l.id && i.sectionId === sec.id) i.sectionId = null; }); l.sections = l.sections.filter(s => s !== sec); commit(); showToast(`已刪除分類「${trunc(sec.name, 10)}」`, [{ label: '復原', fn: undo }]); }, 'red'),
+    I(UI.trash, `刪除分類和裡面 ${n} 個提醒事項`, () => { snapshot(); state.items = state.items.filter(i => !(i.listId === l.id && i.sectionId === sec.id)); l.sections = l.sections.filter(s => s !== sec); commit(); showToast(`已刪除「${trunc(sec.name, 10)}」和 ${n} 個提醒事項`, [{ label: '復原', fn: undo }]); }, 'red', !n),
+  ];
+  openSheet({ title: sec.name, left: '', right: '完成', body: h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)) });
+}
+/* ---------- 移動到分類／列表 ---------- */
+function openMove(ids){
+  ids = ids.filter(id => itemById(id));
+  if (!ids.length) return;
+  const one = ids.length === 1 ? itemById(ids[0]) : null;
+  const ul = h('ul', { class: 'menu' });
+  const choose = (listId, sectionId) => {
+    closeSheet(); snapshot();
+    const base = listItems(listId).filter(i => !ids.includes(i.id));
+    const moving = ids.map(itemById).sort((a, b) => a.order - b.order);
+    moving.forEach(it => { it.listId = listId; it.sectionId = sectionId; });
+    [...base, ...moving].forEach((it, i) => { it.order = i; });
+    selectMode = null;
+    commit(); flashIds(ids);
+    const l = listById(listId); const s = secOf(l, sectionId);
+    showToast(`已移到「${trunc(s ? s.name : l.name, 10)}」`, [{ label: '復原', fn: undo }]);
+  };
+  state.lists.forEach(l => {
+    const isCur = one && one.listId === l.id && !secOf(l, one.sectionId);
+    ul.append(h('li', { class: 'lhead' }, h('button', { onclick: () => choose(l.id, null) },
+      h('span', { class: 'dot', style: { background: colorOf(l) } }), h('span', { style: { flex: 1 } }, l.name + (l.sections.length ? '（未分類）' : '')), isCur ? svgEl(UI.check) : null)));
+    l.sections.forEach(s => {
+      const cur = one && one.listId === l.id && one.sectionId === s.id;
+      ul.append(h('li', { class: 'ind' }, h('button', { onclick: () => choose(l.id, s.id) }, svgEl(UI.folder), h('span', { style: { flex: 1 } }, s.name), cur ? svgEl(UI.check) : null)));
+    });
+    ul.append(h('li', { class: 'ind' }, h('button', { style: { color: 'var(--blue)' }, onclick: () => { closeSheet(); setTimeout(() => openNewSectionFor(l, ids), 330); } }, svgEl(UI.plus.replace('stroke-width="3.4"', 'stroke-width="2.2"')), h('span', {}, '新增分類…'))));
+  });
+  openSheet({ title: one ? '移到分類' : `移動 ${ids.length} 項`, left: '取消', right: '', body: h('div', { class: 'fgroup' }, ul) });
+}
+function openNewSectionFor(l, ids){
+  const inp = h('input', { class: 'lname-in', placeholder: '分類名稱', maxlength: 40, 'aria-label': '分類名稱', enterkeyhint: 'done', style: { fontSize: '18px' } });
+  inp.addEventListener('input', () => { $('#sheetR').disabled = !inp.value.trim(); });
+  inp.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter'){ e.preventDefault(); $('#sheetR').click(); } });
+  openSheet({ title: `在「${trunc(l.name, 8)}」新增分類`, right: '移動', rightDisabled: true, body: h('div', { class: 'fgroup', style: { padding: '16px' } }, inp), onRight: () => {
+    const name = inp.value.trim(); if (!name) return false;
+    snapshot();
+    const s = l.sections.find(x => x.name === name) || (() => { const n = { id: uid(), name, collapsed: false }; l.sections.push(n); return n; })();
+    const base = listItems(l.id).filter(i => !ids.includes(i.id));
+    const moving = ids.map(itemById).filter(Boolean).sort((a, b) => a.order - b.order);
+    moving.forEach(it => { it.listId = l.id; it.sectionId = s.id; });
+    [...base, ...moving].forEach((it, i) => { it.order = i; });
+    selectMode = null; commit(); flashIds(ids);
+    showToast(`已移到「${trunc(name, 10)}」`, [{ label: '復原', fn: undo }]);
+  } });
+  try { inp.focus({ preventScroll: true }); } catch {}
+}
+/* ---------- 複製 ---------- */
+async function toClipboard(text){
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  try {
+    const t = document.createElement('textarea');
+    t.value = text; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;top:0;left:0;opacity:0;font-size:16px';
+    document.body.append(t); t.select(); t.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); t.remove(); return ok;
+  } catch { return false; }
+}
+function doCopy(text, label){
+  toClipboard(text).then(ok => {
+    if (ok) showToast(`已複製${label}`);
+    else {
+      const ta = h('textarea', { class: 'copyfb', readonly: true }); ta.value = text;
+      openSheet({ title: '長按文字 → 全選 → 拷貝', left: '', right: '完成', body: ta });
+      setTimeout(() => { try { ta.focus(); ta.select(); } catch {} }, 350);
+    }
+  });
+}
+function openCopy(id){
+  const it = itemById(id); if (!it) return;
+  const notes = (it.notes || '').trim();
+  const I = (icon, label, fn) => h('li', {}, h('button', { html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
+  const items = [
+    I(UI.copy, '複製標題', () => doCopy(it.title, '標題')),
+    notes ? I(UI.copy, '複製備忘錄', () => doCopy(notes, '備忘錄')) : null,
+    notes ? I(UI.copy, '複製標題和備忘錄', () => doCopy(it.title + '\n' + notes, '標題和備忘錄')) : null,
+    I(UI.dup, '建立副本（再複製一個提醒事項）', () => duplicate(id)),
+  ].filter(Boolean);
+  openSheet({ title: trunc(it.title, 16), left: '', right: '完成', body: h('div', {},
+    notes ? h('div', { class: 'fgroup', style: { padding: '12px 14px', fontSize: '15px', color: 'var(--label2)', whiteSpace: 'pre-wrap', maxHeight: '30vh', overflow: 'auto', userSelect: 'text', WebkitUserSelect: 'text' } }, notes) : null,
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items))) });
+}
+function duplicate(id){
+  const it = itemById(id); if (!it) return;
+  snapshot();
+  const c = clone(it);
+  Object.assign(c, { id: uid(), done: false, doneAt: 0, notified: '', createdAt: Date.now() });
+  const its = listItems(it.listId);
+  its.splice(its.findIndex(x => x.id === id) + 1, 0, c);
+  its.forEach((x, i) => { x.order = i; });
+  state.items.push(c);
+  commit(); flashIds([c.id]);
+  showToast('已建立副本', [{ label: '復原', fn: undo }]);
+}
+function copyItems(ids, withHeaders = false){
+  const its = ids.map(itemById).filter(Boolean);
+  const lines = [];
+  let lastSec;
+  its.forEach(it => {
+    if (withHeaders){ const sn = secName(it); if (sn !== lastSec){ if (sn) lines.push((lines.length ? '\n' : '') + sn + '：'); lastSec = sn; } }
+    lines.push((it.done ? '☑ ' : '☐ ') + it.title);
+    if (it.notes && it.notes.trim()) lines.push(it.notes.trim().split('\n').map(x => '    ' + x).join('\n'));
+  });
+  if (selectMode){ selectMode = null; render(); }
+  doCopy(lines.join('\n'), its.length > 1 ? ` ${its.length} 項` : '');
+}
+function confirmDeleteList(){
+  const l = listById(route.id); if (!l) return;
+  const n = state.items.filter(i => i.listId === l.id).length;
+  const body = h('div', {},
+    h('p', { class: 'cfm' }, `這會刪除「${l.name}」裡的全部 ${n} 個提醒事項。`),
+    h('button', { class: 'bigbtn red', onclick: () => {
+      closeSheet(); snapshot();
+      state.lists = state.lists.filter(x => x.id !== l.id);
+      state.items = state.items.filter(i => i.listId !== l.id);
+      if (!state.lists.length) state.lists.push(defaultList());
+      route = { name: 'home' }; commit();
+      showToast(`已刪除列表「${trunc(l.name, 10)}」`, [{ label: '復原', fn: () => { undo(); } }]);
+    } }, '刪除列表'),
+    h('button', { class: 'bigbtn', onclick: closeSheet }, '取消'));
+  openSheet({ title: '刪除列表？', left: '', right: '', body });
+}
+
+/* =====================================================================
+   Toast
+   ===================================================================== */
+let toastTimer;
+function showToast(msg, actions = []){
+  $('#toastMsg').textContent = msg;
+  const box = $('#toastActs'); box.textContent = '';
+  actions.forEach(a => box.append(h('button', { onclick: () => { hideToast(); a.fn(); } }, a.label)));
+  $('#toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(hideToast, actions.length ? 5500 : 2200);
+}
+function hideToast(){ $('#toast').classList.remove('show'); clearTimeout(toastTimer); }
+
+/* =====================================================================
+   到時間提醒（App 開著時跳出通知）
+   ===================================================================== */
+const bannerQ = [];
+let bannerCur = null, bannerTimer = null;
+let notifiedLocal = (() => { try { return JSON.parse(localStorage.getItem('yige-notified')) || {}; } catch { return {}; } })();
+function checkDue(){
+  const now = Date.now();
+  let changed = false;
+  for (const it of state.items){
+    if (it.done || !it.due) continue;
+    const ft = fireTime(it.due);
+    const key = it.due.date + 'T' + (it.due.time || '09:00');
+    if (ft <= now && now - ft < 12 * 3600e3 && notifiedLocal[it.id] !== key){
+      notifiedLocal[it.id] = key; changed = true;
+      if (!bannerQ.includes(it.id) && (!bannerCur || bannerCur !== it.id)) bannerQ.push(it.id);
+    }
+  }
+  if (changed){ try { localStorage.setItem('yige-notified', JSON.stringify(notifiedLocal)); } catch {} if (!edit && !dragging && !swiping && !sheetOpen()) render(); }
+  nextBanner();
+}
+function nextBanner(){
+  if (bannerCur || !bannerQ.length) return;
+  const id = bannerQ.shift(); const it = itemById(id);
+  if (!it || it.done) return nextBanner();
+  bannerCur = id;
+  const l = listById(it.listId);
+  const b = $('#banner'); b.textContent = '';
+  b.append(
+    h('div', { class: 'bh' }, h('i', { html: `<span style="color:${colorOf(l)};display:contents">${UI.bell}</span>` }), h('span', {}, '提醒事項'), h('span', { class: 'sp' }), h('span', {}, '現在')),
+    h('div', { class: 'bt' }, it.title),
+    h('div', { class: 'bs' }, (l ? l.name + ' · ' : '') + fmtDue(it.due)),
+    h('div', { class: 'ba' },
+      h('button', { onclick: e => { e.stopPropagation(); hideBanner(); const x = itemById(id); if (x && !x.done) toggleDone(id); } }, '標示為完成'),
+      h('button', { onclick: e => { e.stopPropagation(); hideBanner(); snooze(id, 10); } }, '10 分鐘後'),
+      h('button', { onclick: e => { e.stopPropagation(); hideBanner(); } }, '關閉')));
+  b.onclick = () => { hideBanner(); const x = itemById(id); if (x){ go({ name: 'list', id: x.listId }); setTimeout(() => openDetail(id), 50); } };
+  b.classList.add('show');
+  try { navigator.vibrate && navigator.vibrate([30, 60, 30]); } catch {}
+  clearTimeout(bannerTimer);
+  bannerTimer = setTimeout(hideBanner, 12000);
+}
+function hideBanner(){
+  $('#banner').classList.remove('show'); clearTimeout(bannerTimer);
+  bannerCur = null; setTimeout(nextBanner, 400);
+}
+function snooze(id, mins){
+  const it = itemById(id); if (!it) return;
+  const d = new Date(Date.now() + mins * 60e3);
+  it.due = { date: ymd(d), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` };
+  it.notified = '';
+  commit();
+  showToast(`會在 ${fmtTime(it.due.time)} 再提醒你`);
+}
+setInterval(checkDue, 15000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden){ checkDue(); if (!edit) render(); } });
+// 跨日時更新「今天」
+let lastDay = today();
+setInterval(() => { if (today() !== lastDay){ lastDay = today(); if (!edit && !dragging && !swiping) render(); } }, 60000);
+
+/* =====================================================================
+   啟動
+   ===================================================================== */
+render();
+setTimeout(checkDue, 800);
+cloud.init();
+// 放在 GitHub Pages 時：可以加到主畫面、離線也能開
+if (!IN_CLAUDE && 'serviceWorker' in navigator && location.protocol === 'https:'){
+  addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
+window.__app = { get state(){ return state; } };
+})();
+</script>
+</body>
+</html>
