@@ -194,6 +194,21 @@ input,textarea,select{font:inherit;color:inherit}
 .asg.me{color:var(--green);font-weight:600}
 .byw img{width:14px;height:14px;border-radius:50%;object-fit:cover}
 
+/* 新手友善 */
+.welcome{background:var(--card);border-radius:14px;padding:18px 16px 16px;margin:4px 0 6px}
+.welcome .wt{font-size:20px;font-weight:700}
+.welcome .ws{color:var(--label2);font-size:15px;margin:4px 0 14px}
+.wbtn{width:100%;height:50px;border-radius:12px;background:var(--fill);color:var(--blue);font-weight:600;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px}
+.wbtn+.wbtn{margin-top:10px}
+.wbtn.primary{background:var(--blue);color:#fff}
+.wbtn .wi{display:grid;place-items:center}
+.wbtn .wi svg{width:18px;height:18px}
+.ebtns{max-width:320px;margin:20px auto 0}
+.tips{display:flex;align-items:center;gap:8px;background:var(--fill);border-radius:10px;padding:8px 8px 8px 12px;margin:6px 0 4px;font-size:13px;color:var(--label2)}
+.tips span{flex:1;line-height:1.4}
+.tips button{color:var(--blue);font-weight:600;font-size:14px;padding:6px 8px;flex:none}
+.pastehint{background:var(--card);border-radius:10px;padding:10px 14px;margin:0 0 12px;font-size:15px;color:var(--blue);font-weight:600}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
@@ -748,8 +763,8 @@ function paintStatus(el){
   const who = others.length ? `和 ${others.map(id => cloud.nameOf(id) || '另一位').slice(0, 2).join('、')} 共用 · ` : '';
   if (!IN_CLAUDE){
     const nShared = state.lists.filter(l => l.shared).length;
-    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : '資料存在這支手機';
-    el.append(h('span', { class: 'sdot ' + (nShared ? (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') : '') }), h('span', { class: 'stxt' }, txt), h('span', { class: 'shelp' }, '備份／名字'));
+    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : '';
+    el.append(...[nShared ? h('span', { class: 'sdot ' + (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') }) : null, h('span', { class: 'stxt' }, txt), h('span', { class: 'shelp' }, '備份')].filter(Boolean));
     return;
   }
   el.append(dot, h('span', { class: 'stxt' }, (st === 'synced' || st === 'saving') ? who + T[st] : T[st] || ''), av);
@@ -1342,6 +1357,32 @@ function renderHome(){
   fillHome(main);
   return v;
 }
+const tipsSeen = () => { try { return localStorage.getItem('yige-tips') === '1'; } catch { return false; } };
+const tipsDone = () => { try { localStorage.setItem('yige-tips', '1'); } catch {} };
+function welcomeCard(){
+  return h('div', { class: 'welcome' },
+    h('div', { class: 'wt' }, '👋 歡迎使用一格記事'),
+    h('div', { class: 'ws' }, '把要做的事一件一件記下來，做完就打勾。'),
+    h('button', { class: 'wbtn primary', onclick: () => { go({ name: 'list', id: firstList().id }); addAtEnd(); } }, h('span', { html: UI.plus, class: 'wi' }), '新增第一件事'),
+    h('button', { class: 'wbtn', onclick: () => pasteBig() }, h('span', { html: UI.copy, class: 'wi' }), '貼上一大段文字，自動拆開'));
+}
+/* 貼上一大段：能讀剪貼簿就直接拆，不能就打開新增視窗讓他貼 */
+async function pasteBig(ctx){
+  ctx = ctx || (route.name === 'list' ? { listId: route.id } : {});
+  let text = '';
+  try { if (navigator.clipboard && navigator.clipboard.readText) text = await navigator.clipboard.readText(); } catch {}
+  const res = text ? Splitter.split(text) : [];
+  if (res.some(x => x.kind === 'item') && (res.length > 1 || text.length > 1)){
+    snapshot();
+    const listId = ctx.listId && listById(ctx.listId) ? ctx.listId : firstList().id;
+    const r = createFromSplit(res, { ...ctx, listId }, null, true);
+    if (route.name !== 'list' || route.id !== listId) route = { name: 'list', id: listId };
+    commit(); scrollTo(0, 0); flashIds(r.made.map(m => m.id));
+    showToast(`已拆成 ${r.made.length} 個` + (r.secs.length ? `，${r.secs.length} 個分類` : ''), [{ label: '復原', fn: undo }]);
+    return;
+  }
+  openNew(ctx, true);
+}
 function fillHome(main){
   main.textContent = '';
   const v = main;
@@ -1356,8 +1397,12 @@ function fillHome(main){
     return;
   }
   const t = h('div', { class: 'tiles' });
+  const newbie = !state.items.length;
+  if (newbie) v.append(welcomeCard());
   for (const k of Object.keys(SMART)){
+    if (newbie) break;                                     // 新手先不顯示這些方塊
     if (k === 'mine' && !(hasShared() && SYNC.me)) continue;
+    if (k !== 'today' && k !== 'all' && !smartCount(k)) continue;   // 沒東西的方塊先藏起來
     const S = SMART[k];
     const ic = k === 'today'
       ? `<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 9.5h17" stroke="currentColor" stroke-width="2"/><text x="12" y="18.2" text-anchor="middle" font-size="8.5" font-weight="700" fill="currentColor" font-family="-apple-system,system-ui">${new Date().getDate()}</text></svg>`
@@ -1367,7 +1412,9 @@ function fillHome(main){
       h('span', { class: 'num' }, String(smartCount(k))),
       h('span', { class: 'nm' }, S.name)));
   }
-  v.append(t, h('div', { class: 'sechd' }, '我的列表'));
+  if (t.children.length % 2 === 1 && t.children.length > 1) t.lastChild.style.gridColumn = '1 / 3';
+  if (t.children.length) v.append(t);
+  v.append(h('div', { class: 'sechd' }, '我的列表'));
   const g = h('ul', { class: 'group' });
   state.lists.forEach(l => {
     const n = state.items.filter(i => i.listId === l.id && !i.done).length;
@@ -1376,7 +1423,7 @@ function fillHome(main){
       h('span', { class: 'lin' }, h('span', { class: 'lname' }, l.name), l.shared ? h('span', { class: 'lshared', title: '共用中' }, '👥') : null, h('span', { class: 'lcnt' }, String(n)), svgEl(UI.chev)))));
   });
   v.append(g);
-  if (!state.items.length) v.append(h('p', { class: 'hint', style: { whiteSpace: 'pre-line' } }, '點左下角「新增提醒事項」開始。\n把一大段文字貼進去，會自動拆成一個一個提醒事項。'));
+
 }
 
 /* ---------- 列表頁 ---------- */
@@ -1396,7 +1443,7 @@ function renderList(){
   v.append(nav);
   v.append(h('h1', { class: 'bigtitle', style: { color: vm.color, cursor: route.name === 'list' ? 'pointer' : '' }, title: route.name === 'list' ? '點一下改名稱' : null, onclick: route.name === 'list' && !selectMode ? () => openListEditor(route.id) : null }, vm.title));
   // 已完成數量列
-  if (!vm.noDoneBar && !vm.completedView){
+  if (!vm.noDoneBar && !vm.completedView && (vm.doneScope.length || showDone())){
     const n = vm.doneScope.length;
     v.append(h('div', { class: 'donebar' },
       h('span', {}, `${n} 個已完成`), h('span', {}, '•'),
@@ -1409,6 +1456,10 @@ function renderList(){
       h('button', { disabled: !n, onclick: () => deleteItems(vm.doneScope.map(i => i.id), `已清除 ${n} 個已完成的提醒事項`) }, '全部清除')));
   }
 
+  const anyItems = vm.sections.some(s => s.items.length);
+  if (anyItems && !tipsSeen() && !selectMode) v.append(h('div', { class: 'tips' },
+    h('span', {}, '點一下編輯 · 長按看更多 · 往左滑刪除'),
+    h('button', { 'aria-label': '知道了', onclick: e => { tipsDone(); e.currentTarget.parentElement.remove(); } }, '知道了')));
   let total = 0, ghostPlaced = false;
   if (vm.sectioned){ renderSectioned(v, vm); return v; }
   const secs = vm.sections.slice();
@@ -1441,7 +1492,13 @@ function renderList(){
   }
   if (!total && !(edit && edit.ghost)){
     const msg = vm.completedView ? '沒有已完成的提醒事項' : route.name === 'search' ? '找不到符合的提醒事項' : '沒有提醒事項';
-    v.append(h('div', { class: 'empty' }, msg, vm.canAdd ? h('small', {}, '點一下空白處開始輸入\n貼上一大段文字會自動拆成好幾個') : null));
+    if (vm.canAdd) v.append(h('div', { class: 'empty' },
+      h('div', { style: { fontSize: '44px', marginBottom: '6px' } }, '📝'),
+      '這裡還沒有東西',
+      h('div', { class: 'ebtns' },
+        h('button', { class: 'wbtn primary', onclick: () => addAtEnd(vm) }, h('span', { html: UI.plus, class: 'wi' }), '新增一件事'),
+        h('button', { class: 'wbtn', onclick: () => pasteBig(route.name === 'list' ? { listId: route.id } : vm.defaultCtx) }, h('span', { html: UI.copy, class: 'wi' }), '貼上一大段文字'))));
+    else v.append(h('div', { class: 'empty' }, msg));
   }
   // 點空白處新增（跟 iPhone 一樣）
   const tz = h('div', { class: 'tapzone' });
@@ -1625,7 +1682,7 @@ function editor(field){
   const isNotes = field === 'notes';
   const ta = h('textarea', { class: isNotes ? 'enotes' : 'etitle', rows: 1, 'data-edit': field,
     'aria-label': isNotes ? '備忘錄' : '提醒事項標題', enterkeyhint: isNotes ? 'enter' : 'next',
-    placeholder: isNotes ? '備忘錄' : (edit.ghost ? '新增提醒事項' : '') });
+    placeholder: isNotes ? '加備註（可不填）' : (edit.ghost ? '輸入要做的事' : '') });
   ta.value = isNotes ? (edit.notes || '') : edit.value;
   ta.addEventListener('focus', () => { if (edit && edit.field !== field){ edit.field = field; edit.caret = ta.selectionStart; } });
   ta.addEventListener('input', () => {
@@ -1664,16 +1721,9 @@ function chipsFor(cur, onPatch, onMore){
   const mk = (label, date) => h('button', { class: 'chip' + (d === date ? ' on' : ''), onpointerdown: keep,
     onclick: () => onPatch({ due: d === date ? null : { date, time: (cur.due && cur.due.time) || null } }) }, label);
   const box = h('div', { class: 'chips' },
-    mk('今天', t), mk('明天', tm), mk('本週末', we),
-    h('button', { class: 'chip' + (d && d !== t && d !== tm && d !== we ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm && d !== we ? fmtDay(d) : '日期與時間') + '</span>', onpointerdown: keep, onclick: onMore }),
+    mk('今天', t), mk('明天', tm),
+    h('button', { class: 'chip' + (d && d !== t && d !== tm ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm ? fmtDay(d) : '日期') + '</span>', onpointerdown: keep, onclick: onMore }),
     h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag, 'aria-label': cur.flagged ? '取消標記' : '標記', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
-  if (cur.item){
-    const it = cur.item;
-    const sn = secName(it);
-    box.append(
-      h('button', { class: 'chip', html: UI.folder + `<span>${sn ? sn : '分類'}</span>`, onpointerdown: keep, onclick: () => { commitEdit(); openMove([it.id]); } }),
-      h('button', { class: 'chip', html: UI.copy + '<span>複製</span>', onpointerdown: keep, onclick: () => { commitEdit(); openCopy(it.id); } }));
-  }
   return box;
 }
 function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
@@ -1996,12 +2046,13 @@ function openDetail(id){
     commit();
   } });
 }
-function openNew(ctx){
+function openNew(ctx, pasteHint){
   const listId = (ctx.listId && listById(ctx.listId)) ? ctx.listId : (route.name === 'list' ? route.id : firstList().id);
   const w = { title: '', notes: '', due: ctx.due ? clone(ctx.due) : null, repeat: '', flagged: !!ctx.flagged, priority: 0, listId, sectionId: ctx.sectionId || null, parts: null, res: null };
   const R = () => $('#sheetR');
   const f = reminderForm(w, { isNew: true, onChange: () => { R().disabled = !w.title.trim(); R().textContent = w.parts ? `加入 ${w.parts.length} 個` : '加入'; } });
-  openSheet({ title: '新增提醒事項', right: '加入', rightDisabled: true, body: f.el, onRight: () => {
+  if (pasteHint) f.el.prepend(h('div', { class: 'pastehint' }, '👇 長按下面的框框 →「貼上」，一大段文字會自動拆成好幾個'));
+  openSheet({ title: pasteHint ? '貼上一大段文字' : '新增提醒事項', right: '加入', rightDisabled: true, body: f.el, onRight: () => {
     if (!w.title.trim()) return false;
     snapshot();
     const baseCtx = { listId: w.listId, sectionId: w.sectionId, due: w.due, flagged: w.flagged, priority: w.priority, repeat: w.due ? w.repeat : '' };
