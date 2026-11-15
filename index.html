@@ -389,7 +389,14 @@ if (typeof module !== 'undefined') module.exports = Splitter;
 })();
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
+  authDomain: "yige-notes.firebaseapp.com",
+  projectId: "yige-notes",
+  storageBucket: "yige-notes.firebasestorage.app",
+  messagingSenderId: "695769734038",
+  appId: "1:695769734038:web:463b8ae8953a1f13f39bb7"
+};
 /* ↑↑↑ ↑↑↑ */
 const stable = v => Array.isArray(v) ? '[' + v.map(stable).join(',') + ']'
   : (v && typeof v === 'object') ? '{' + Object.keys(v).filter(k => v[k] !== undefined).sort().map(k => JSON.stringify(k) + ':' + stable(v[k])).join(',') + '}'
