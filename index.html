@@ -147,6 +147,8 @@ input,textarea,select{font:inherit;color:inherit}
 .etitle{max-height:calc(30vh / var(--z, 1));overflow-y:auto}
 .enotes{display:block;width:100%;border:0;background:transparent;outline:none;resize:none;padding:0;margin:4px 0 0;font-size:15px;line-height:1.4;color:var(--label2);max-height:calc(40vh / var(--z, 1));overflow-y:auto;overscroll-behavior:contain;-webkit-user-select:text;user-select:text;touch-action:pan-y}
 .enotes::placeholder{color:var(--label3)}
+.enotes.collapsed{max-height:2.8em}
+.ntog{display:block;color:var(--blue);font-size:14px;font-weight:600;padding:6px 0 2px}
 .chips{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;touch-action:pan-x;margin-right:-12px;padding-right:12px;-webkit-overflow-scrolling:touch}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;white-space:nowrap}
@@ -2000,7 +2002,7 @@ function renderRow(it, vm){
 
   const txt = h('div', { class: 'rtext' });
   if (isEditing){
-    txt.append(editor('title'), editor('notes'));
+    txt.append(editor('title'), ...notesBlock());
     const m = rowMeta(it, vm, true); if (m) txt.append(m);
     txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
   } else {
@@ -2035,7 +2037,7 @@ function renderGhost(vm){
   const l = listById(ctx.listId) || firstList();
   const li = h('li', { class: 'row editing', style: {} });
   li.style.setProperty('--c', colorOf(l));
-  const txt = h('div', { class: 'rtext' }, editor('title'), editor('notes'));
+  const txt = h('div', { class: 'rtext' }, editor('title'), ...notesBlock());
   const fake = { due: ctx.due, repeat: '', listId: l.id, done: false };
   const m = rowMeta(fake, vm); if (m) txt.append(m);
   txt.append(chipsFor({ due: ctx.due, flagged: ctx.flagged }, patch => { Object.assign(ctx, patch); render(); }, () => {
@@ -2052,6 +2054,23 @@ function renderGhost(vm){
     } }));
   li.append(h('div', { class: 'fg' }, h('span', { class: 'circle' }), body));
   return li;
+}
+/* 備忘錄很長時，預設只顯示兩行，點「展開全文」才全部打開 */
+const isLongNote = t => (t || '').length > 50 || /\n/.test((t || '').trim());
+function notesBlock(){
+  const ta = editor('notes');
+  if (!isLongNote(edit.notes)) return [ta];
+  const open = !!edit.notesOpen;
+  ta.classList.toggle('collapsed', !open);
+  const btn = h('button', { class: 'ntog', onpointerdown: e => e.preventDefault() }, open ? '收起 ▲' : '展開全文 ▼');
+  btn.addEventListener('click', () => {
+    if (!edit) return;
+    edit.notesOpen = !edit.notesOpen;
+    ta.classList.toggle('collapsed', !edit.notesOpen);
+    btn.textContent = edit.notesOpen ? '收起 ▲' : '展開全文 ▼';
+    ta.scrollTop = 0; autoGrow(ta);
+  });
+  return [ta, btn];
 }
 function editor(field){
   const isNotes = field === 'notes';
