@@ -480,7 +480,7 @@ if (typeof module !== 'undefined') module.exports = Splitter;
     // 正在輸入的地方被擋住時，捲到看得到的位置
     const a = document.activeElement;
     if (open && a && /^(INPUT|TEXTAREA)$/.test(a.tagName)){
-      setTimeout(() => { const r = a.getBoundingClientRect(); if (r.bottom > vv.height - 8 || r.top < 0) a.scrollIntoView({ block: 'center' }); }, 60);
+      setTimeout(() => { const r = a.getBoundingClientRect(); if (r.bottom > vv.height - 8 || r.top < 0) a.scrollIntoView({ block: 'nearest' }); }, 60);
     }
   }
   vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd);
@@ -1487,9 +1487,9 @@ function toggleDone(id){
   }
   it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; it.doneBy = it.done ? (SYNC.me || '') : '';
   if (it.done){
-    recentDone.set(id, setTimeout(() => { recentDone.delete(id); if (!edit && !dragging && !swiping) render(); }, 1600));
+    recentDone.set(id, setTimeout(() => { recentDone.delete(id); if (!edit && !dragging && !swiping){ const el = document.querySelector(`.row[data-id="${id}"]`); const nx = el && el.nextElementSibling && el.nextElementSibling.dataset ? el.nextElementSibling.dataset.id : null; renderAnchored(nx); } }, 1600));
   } else { clearTimeout(recentDone.get(id)); recentDone.delete(id); }
-  commit();
+  save(); renderAnchored(id);
 }
 function deleteItems(ids, msg){
   snapshot();
@@ -1501,11 +1501,19 @@ function deleteItems(ids, msg){
 const trunc = (s, n) => { s = s.replace(/\s+/g, ' '); return s.length > n ? s.slice(0, n) + '…' : s; };
 
 /* ---------- 直接在列表裡編輯（跟 iPhone 一樣） ---------- */
+/* 重畫畫面時，讓指定的那一格停在原本的位置，不要跳走 */
+function rowTop(id){ const el = id && document.querySelector(`.row[data-id="${id}"]`); return el ? el.getBoundingClientRect().top : null; }
+function renderAnchored(id){
+  const before = rowTop(id);
+  render();
+  const after = rowTop(id);
+  if (before != null && after != null && Math.abs(after - before) > 1) scrollBy(0, after - before);
+}
 function startEdit(id, field = 'title'){
   if (edit) commitEdit({ render: false });
   const it = itemById(id); if (!it) return;
   edit = { id, value: it.title, notes: it.notes || '', field, caret: field === 'notes' ? (it.notes || '').length : it.title.length };
-  render();
+  renderAnchored(id);
 }
 function startGhost(afterId, ctx){
   if (edit) commitEdit({ render: false });
@@ -1513,7 +1521,7 @@ function startGhost(afterId, ctx){
   const sec = l && secOf(l, ctx.sectionId);
   if (sec && sec.collapsed){ sec.collapsed = false; save(); }
   edit = { ghost: { afterId: afterId || null, ctx: clone(ctx || {}) }, value: '', notes: '', field: 'title', caret: 0 };
-  render();
+  renderAnchored(afterId);
 }
 function commitEdit({ next = false, render: doRender = true } = {}){
   const e = edit; if (!e) return;
@@ -1540,7 +1548,7 @@ function commitEdit({ next = false, render: doRender = true } = {}){
     else flashIds([m.id]);
   }
   if (changed) save();
-  if (doRender) render();
+  if (doRender) renderAnchored(e.id || (e.ghost && e.ghost.afterId));
   if (!edit) applyPendingRemote();
 }
 /* 在任何一格貼上多行文字 → 拆成好幾個提醒事項 */
@@ -1618,7 +1626,8 @@ function render(){
         try { ta.setSelectionRange(c, c); } catch {}
         app.querySelectorAll('textarea[data-edit]').forEach(autoGrow);
         const r = ta.getBoundingClientRect();
-        if (r.top > innerHeight - 60 || r.bottom < 40) ta.closest('.row').scrollIntoView({ block: 'center' });
+        const vh = window.visualViewport ? visualViewport.height : innerHeight;
+        if (r.top > vh - 40 || r.bottom < 60) ta.scrollIntoView({ block: 'nearest' });
       } else {
         // 正在編輯的項目因為改了日期等原因離開這個畫面：先把文字存起來
         const e = edit; edit = null;
