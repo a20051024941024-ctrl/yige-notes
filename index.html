@@ -267,6 +267,22 @@ input,textarea,select{font:inherit;color:inherit}
 .ordbtns button:active{background:var(--fill2)}
 .row.ordering .circle{opacity:.4}
 
+/* 進行中、上次複製、接著做 */
+.doing{color:#fff;background:var(--blue);border-radius:8px;padding:0 7px;font-size:12px;font-weight:600;line-height:18px}
+.lastcp{color:var(--blue);font-weight:600}
+.chip.doingon{background:var(--blue);color:#fff}
+.resume{background:var(--fill);border-radius:14px;padding:12px 12px 12px 14px;margin:10px 0 6px}
+.resume .rh{display:flex;align-items:baseline;gap:8px;min-width:0}
+.resume .rl{font-size:13px;color:var(--blue);font-weight:600;flex:none}
+.resume .rh b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px}
+.resume .rt{font-size:12px;color:var(--label2);flex:none}
+.resume .rx{color:var(--label3);font-size:15px;padding:0 2px 0 6px;flex:none}
+.resume .rb{display:flex;gap:8px;margin-top:10px}
+.resume .rbtn{height:38px;border-radius:10px;padding:0 12px;background:var(--card);font-size:14px;font-weight:600;color:var(--label);flex:none}
+.resume .rbtn.primary{background:var(--blue);color:#fff;flex:1;min-width:0}
+.resume .rn{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.resume .rdone{font-size:14px;color:var(--green);align-self:center}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
@@ -517,7 +533,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v18';
+const APP_VERSION = 'yige-v19';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1367,6 +1383,7 @@ const SMART = {
   flagged:   { name: '重點',   color: 'var(--orange)',   icon: 'flag' },
   completed: { name: '已完成', color: 'var(--grey)',     icon: 'check' },
   mine:      { name: '指派給我', color: 'var(--green)',   icon: 'person' },
+  doing:     { name: '進行中',   color: 'var(--blue)',    icon: 'copy' },
 };
 const hasShared = () => state.lists.some(l => l.shared);
 function smartCount(k){
@@ -1379,6 +1396,7 @@ function smartCount(k){
     case 'flagged': return open.filter(i => i.flagged).length;
     case 'completed': return state.items.filter(i => i.done).length;
     case 'mine': return open.filter(i => i.assignee && i.assignee === SYNC.me).length;
+    case 'doing': return open.filter(i => i.doing).length;
   }
   return 0;
 }
@@ -1453,6 +1471,10 @@ function viewModel(){
     const scope = state.items.filter(i => i.flagged);
     return { ...base, defaultCtx: { flagged: true }, doneScope: scope.filter(i => i.done), sections: [{ items: scope.filter(visibleDone).sort(byListOrder), ctx: { flagged: true } }] };
   }
+  if (k === 'doing'){
+    const scope = state.items.filter(i => i.doing && !i.done);
+    return { ...base, canAdd: false, noDoneBar: true, doneScope: [], sections: [{ items: scope.sort((a, b) => (b.copiedAt || 0) - (a.copiedAt || 0)), ctx: null }] };
+  }
   if (k === 'mine'){
     const scope = state.items.filter(i => i.assignee && i.assignee === SYNC.me);
     return { ...base, canAdd: false, doneScope: scope.filter(i => i.done), sections: [{ items: scope.filter(visibleDone).sort(byListOrder), ctx: null }] };
@@ -1519,6 +1541,7 @@ function toggleDone(id){
     return;
   }
   it.done = !it.done; it.doneAt = it.done ? Date.now() : 0; it.doneBy = it.done ? (SYNC.me || '') : '';
+  if (it.done) it.doing = false;
   if (it.done){
     recentDone.set(id, setTimeout(() => { recentDone.delete(id); if (!edit && !dragging && !swiping){ const el = document.querySelector(`.row[data-id="${id}"]`); const nx = el && el.nextElementSibling && el.nextElementSibling.dataset ? el.nextElementSibling.dataset.id : null; renderAnchored(nx); } }, 1600));
   } else { clearTimeout(recentDone.get(id)); recentDone.delete(id); }
@@ -1643,7 +1666,7 @@ function h(tag, props = {}, ...kids){
 
 function render(){
   rendering = true;
-  prefixCache.clear();
+  prefixCache.clear(); lastCopyCache.clear();
   try {
     const app = $('#app');
     app.textContent = '';
@@ -1796,6 +1819,8 @@ function renderList(){
       h('button', { disabled: !n, onclick: () => deleteItems(vm.doneScope.map(i => i.id), `已清除 ${n} 個已完成的提醒事項`) }, '全部清除')));
   }
 
+  const rc = route.name === 'list' && !selectMode && !orderMode ? resumeCard(vm) : null;
+  if (rc) v.append(rc);
   const anyItems = vm.sections.some(s => s.items.length);
   if (anyItems && !tipsSeen() && !selectMode) v.append(h('div', { class: 'tips' },
     h('span', {}, '點一下編輯 · 長按看更多 · 往左滑刪除'),
@@ -1882,6 +1907,31 @@ function secTiles(vm){
   box.append(tile('__add', '＋', '新增分類', null, () => openSectionName(l, null), ' add'));
   return box;
 }
+/* 「接著做」：上次複製到哪一個、下一個是誰，一按就複製下一個 */
+function resumeCard(vm){
+  const l = vm.list; if (!l) return null;
+  const lid = lastCopiedId(l.id); if (!lid) return null;
+  const last = itemById(lid); if (!last) return null;
+  state.hideResume = state.hideResume || {};
+  if (state.hideResume[l.id] === last.copiedAt) return null;
+  const all = listItems(l.id);
+  const k = all.findIndex(i => i.id === last.id);
+  const next = all.slice(k + 1).find(i => !i.done && i.id !== last.id) || null;
+  if (last.done && !next) return null;
+  const box = h('div', { class: 'resume' });
+  box.append(
+    h('div', { class: 'rh' },
+      h('span', { class: 'rl' }, '📋 上次複製'),
+      h('b', {}, last.title),
+      h('span', { class: 'rt' }, fmtStamp(last.copiedAt)),
+      h('button', { class: 'rx', 'aria-label': '先不要顯示', onclick: () => { state.hideResume[l.id] = last.copiedAt; commit(); } }, '✕')),
+    h('div', { class: 'rb' },
+      last.done ? h('span', { class: 'rdone' }, '✓ 已完成')
+        : h('button', { class: 'rbtn', onclick: () => toggleDone(last.id) }, '✓ 這個完成了'),
+      next ? h('button', { class: 'rbtn primary', onclick: () => { copyItem(next, 'notes'); flashIds([next.id]); } }, h('span', { class: 'rn' }, '複製下一個：' + next.title))
+        : h('span', { class: 'rdone' }, '這是最後一個了')));
+  return box;
+}
 function renderSectioned(v, vm){
   const l = vm.list;
   const showTiles = l.sections.length >= 2;
@@ -1961,6 +2011,14 @@ function withHighlights(text){
 }
 /* 同一個列表裡，備忘錄開頭都一樣的那段先省略，只顯示不一樣的重點 */
 const prefixCache = new Map();
+const lastCopyCache = new Map();
+function lastCopiedId(listId){
+  if (lastCopyCache.has(listId)) return lastCopyCache.get(listId);
+  let best = null;
+  for (const i of state.items) if (i.listId === listId && i.copiedAt && (!best || i.copiedAt > best.copiedAt)) best = i;
+  lastCopyCache.set(listId, best ? best.id : null);
+  return best ? best.id : null;
+}
 function sharedPrefix(listId){
   if (prefixCache.has(listId)) return prefixCache.get(listId);
   const ns = state.items.filter(i => i.listId === listId && (i.notes || '').trim()).map(i => i.notes.trim());
@@ -2001,11 +2059,13 @@ function rowMeta(it, vm, isEditing){
   }
   const lst = listById(it.listId);
   const sharedHere = IN_CLAUDE ? !!cloud.me : !!(lst && lst.shared);
+  if (it.doing && !it.done) parts.unshift(h('span', { class: 'doing' }, '進行中' + (sharedHere && it.doingBy && it.doingBy !== SYNC.me ? '・' + (SYNC.nameOf(it.doingBy, it.listId) || '某人') : '')));
+  if (it.copiedAt && lastCopiedId(it.listId) === it.id) parts.unshift(h('span', { class: 'lastcp' }, '📋 上次複製 ' + fmtStamp(it.copiedAt)));
   if (sharedHere && it.assignee) parts.push(h('span', { class: 'asg' + (it.assignee === SYNC.me ? ' me' : '') }, '👤 ' + (it.assignee === SYNC.me ? '我' : (SYNC.nameOf(it.assignee, it.listId) || '某人'))));
   const who = id => id === SYNC.me ? '我' : (SYNC.nameOf(id, it.listId) || '某人');
   if (it.done && it.doneAt){
     parts.push(h('span', { class: 'stamp done' }, '✓ ' + (sharedHere && it.doneBy ? who(it.doneBy) + ' ' : '') + fmtStamp(it.doneAt) + ' 完成'));
-  } else if (it.createdAt){
+  } else if (it.createdAt && !it.doing && lastCopiedId(it.listId) !== it.id){
     parts.push(h('span', { class: 'stamp' }, (sharedHere && it.createdBy ? who(it.createdBy) + ' ' : '') + fmtStamp(it.createdAt) + ' 提出'));
   }
   if (it.done) {}
@@ -2197,6 +2257,7 @@ function chipsFor(cur, onPatch, onMore){
     mk('今天', t), mk('明天', tm),
     h('button', { class: 'chip' + (d && d !== t && d !== tm ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm ? fmtDay(d) : '日期') + '</span>', onpointerdown: keep, onclick: onMore }),
     h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag + '<span>重點</span>', 'aria-label': cur.flagged ? '取消重點' : '設為重點', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
+  if (cur.item && !cur.item.done) box.append(h('button', { class: 'chip' + (cur.item.doing ? ' doingon' : ''), onpointerdown: keep, onclick: () => onPatch({ doing: !cur.item.doing, doingBy: !cur.item.doing ? (SYNC.me || '') : '' }) }, '▶ 進行中'));
   return box;
 }
 function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
@@ -2851,20 +2912,37 @@ function doCopy(text, label){
     }
   });
 }
+/* 複製某一格的內容 → 記住「上次複製」，並標成「進行中」 */
+function markCopied(it){
+  it.copiedAt = Date.now(); it.copiedBy = SYNC.me || '';
+  if (!it.done){ it.doing = true; it.doingBy = SYNC.me || ''; }
+  const l = listById(it.listId);
+  if (l && state.hideResume) delete state.hideResume[l.id];
+  save(); render();
+}
+function copyItem(it, what){
+  const notes = (it.notes || '').trim();
+  const text = what === 'title' ? it.title : what === 'both' ? it.title + '\n' + notes : (notes || it.title);
+  const label = what === 'title' ? '標題' : what === 'both' ? '標題和內容' : (notes ? '內容' : '標題');
+  doCopy(text, `「${trunc(it.title, 8)}」的${label}`);
+  markCopied(it);
+}
+function toggleDoing(it){ it.doing = !it.doing; it.doingBy = it.doing ? (SYNC.me || '') : ''; commit(); showToast(it.doing ? `「${trunc(it.title, 10)}」進行中` : '已取消進行中'); }
 function openCopy(id, withMore){
   const it = itemById(id); if (!it) return;
   const notes = (it.notes || '').trim();
   const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
   const later = fn => () => setTimeout(fn, 330);
   const items = [
-    notes ? I(UI.copy, '複製內容', () => doCopy(notes, '內容')) : null,
-    I(UI.copy, '複製標題', () => doCopy(it.title, '標題')),
-    notes ? I(UI.copy, '複製標題和內容', () => doCopy(it.title + '\n' + notes, '標題和內容')) : null,
+    notes ? I(UI.copy, '複製內容', () => copyItem(it, 'notes')) : null,
+    I(UI.copy, '複製標題', () => copyItem(it, 'title')),
+    notes ? I(UI.copy, '複製標題和內容', () => copyItem(it, 'both')) : null,
     I(UI.dup, '建立副本（再複製一個提醒事項）', () => duplicate(id)),
   ].filter(Boolean);
   const more = withMore ? h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
     I(UI.info, '詳細資訊', later(() => openDetail(id))),
     I(UI.folder, '移到分類', later(() => openMove([id]))),
+    it.done ? null : I(UI.copy, it.doing ? '取消進行中' : '標為進行中', () => toggleDoing(it)),
     I(UI.flag, it.flagged ? '取消重點' : '設為重點', () => { it.flagged = !it.flagged; commit(); }),
     I(UI.trash, '刪除', () => deleteItems([id], `已刪除「${trunc(it.title, 12)}」`), 'red'))) : null;
   openSheet({ title: trunc(it.title, 16), left: '', right: '完成', body: h('div', {},
