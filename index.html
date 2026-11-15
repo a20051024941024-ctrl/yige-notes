@@ -128,7 +128,7 @@ input,textarea,select{font:inherit;color:inherit}
 .infobtn svg{width:24px;height:24px}
 .editbtns{display:flex;flex-direction:column;gap:14px;flex:none;align-items:center}
 .etitle{display:block;width:100%;border:0;background:transparent;outline:none;resize:none;padding:0;margin:0;line-height:1.29;min-height:22px;-webkit-user-select:text;user-select:text}
-.etitle::placeholder{color:var(--label3)}
+.etitle::placeholder{color:var(--label2);font-weight:600}
 .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .chip{height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:14px;display:inline-flex;align-items:center;gap:4px;color:var(--label)}
 .chip svg{width:15px;height:15px}
@@ -146,7 +146,7 @@ input,textarea,select{font:inherit;color:inherit}
 .row.editing{touch-action:auto;-webkit-user-select:text;user-select:text}
 .etitle{max-height:calc(30vh / var(--z, 1));overflow-y:auto}
 .enotes{display:block;width:100%;border:0;background:transparent;outline:none;resize:none;padding:0;margin:4px 0 0;font-size:15px;line-height:1.4;color:var(--label2);max-height:calc(40vh / var(--z, 1));overflow-y:auto;overscroll-behavior:contain;-webkit-user-select:text;user-select:text;touch-action:pan-y}
-.enotes::placeholder{color:var(--label3)}
+.enotes::placeholder{color:var(--label2)}
 .enotes.collapsed{max-height:2.8em}
 .ntog{display:block;color:var(--blue);font-size:14px;font-weight:600;padding:6px 0 2px}
 .chips{flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;touch-action:pan-x;margin-right:-12px;padding-right:12px;-webkit-overflow-scrolling:touch}
@@ -284,7 +284,7 @@ body.kb-open .sheet{border-radius:12px}
 .fgroup .fl small.od{color:var(--red)}
 .fgroup textarea{width:100%;border:0;background:transparent;outline:none;resize:none;padding:12px 14px;display:block;line-height:1.35}
 .fgroup textarea.tt{border-bottom:.5px solid var(--sep)}
-.fgroup textarea::placeholder{color:var(--label3)}
+.fgroup textarea::placeholder{color:var(--label2)}
 .fgroup input[type=date],.fgroup input[type=time]{border:0;background:var(--fill);border-radius:7px;padding:5px 8px;font-size:16px;color:var(--label);min-height:34px}
 .fgroup select{border:0;background:transparent;color:var(--label2);font-size:17px;text-align:right;direction:rtl;outline:none;max-width:60%;-webkit-appearance:none;appearance:none;padding-right:2px}
 .fgroup .chev{width:8px;height:14px;color:var(--label3);flex:none}
@@ -2075,8 +2075,8 @@ function notesBlock(){
 function editor(field){
   const isNotes = field === 'notes';
   const ta = h('textarea', { class: isNotes ? 'enotes' : 'etitle', rows: 1, 'data-edit': field,
-    'aria-label': isNotes ? '備忘錄' : '提醒事項標題', enterkeyhint: isNotes ? 'enter' : 'next',
-    placeholder: isNotes ? '加備註（可不填）' : (edit.ghost ? '輸入要做的事' : '') });
+    'aria-label': isNotes ? '內容' : '標題', enterkeyhint: isNotes ? 'enter' : 'next',
+    placeholder: isNotes ? '內容（要寫的東西，可不填）' : '標題' });
   ta.value = isNotes ? (edit.notes || '') : edit.value;
   ta.addEventListener('focus', () => { if (edit && edit.field !== field){ edit.field = field; edit.caret = ta.selectionStart; } });
   ta.addEventListener('input', () => {
@@ -2327,7 +2327,7 @@ function reminderForm(w, { isNew, onChange }){
   const wrap = h('div');
   const title = h('textarea', { class: 'tt', rows: 1, placeholder: '標題', 'aria-label': '標題' });
   title.value = w.title;
-  const notes = h('textarea', { rows: 2, placeholder: '備忘錄', 'aria-label': '備忘錄' });
+  const notes = h('textarea', { rows: 2, placeholder: '內容（要寫的東西，可不填）', 'aria-label': '內容' });
   notes.value = w.notes;
   const split = h('div', { class: 'splitnote', hidden: true });
   const refreshSplit = () => {
@@ -2768,9 +2768,9 @@ function openCopy(id, withMore){
   const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: () => { closeSheet(); fn(); } }));
   const later = fn => () => setTimeout(fn, 330);
   const items = [
-    notes ? I(UI.copy, '複製備忘錄', () => doCopy(notes, '備忘錄')) : null,
+    notes ? I(UI.copy, '複製內容', () => doCopy(notes, '內容')) : null,
     I(UI.copy, '複製標題', () => doCopy(it.title, '標題')),
-    notes ? I(UI.copy, '複製標題和備忘錄', () => doCopy(it.title + '\n' + notes, '標題和備忘錄')) : null,
+    notes ? I(UI.copy, '複製標題和內容', () => doCopy(it.title + '\n' + notes, '標題和內容')) : null,
     I(UI.dup, '建立副本（再複製一個提醒事項）', () => duplicate(id)),
   ].filter(Boolean);
   const more = withMore ? h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
