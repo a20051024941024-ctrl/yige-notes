@@ -234,6 +234,27 @@ input,textarea,select{font:inherit;color:inherit}
 .emb.on{background:var(--fill2)}
 .emb:active{background:var(--fill)}
 
+/* 登入 */
+.loginbtn{flex:none;color:#fff;background:var(--blue);border-radius:14px;padding:3px 12px;font-weight:600;font-size:14px}
+.acct{display:inline-flex;align-items:center;gap:6px;flex:none;color:var(--label);font-weight:600;font-size:14px;background:var(--card);border-radius:16px;padding:2px 10px 2px 3px}
+.acct img,.acct i,.acctcard img,.acctcard>i{width:24px;height:24px;border-radius:50%;object-fit:cover;background:var(--blue);color:#fff;display:grid;place-items:center;font-style:normal;font-size:12px}
+.acctcard{display:flex;align-items:center;gap:14px;padding:16px}
+.acctcard img,.acctcard>i{width:52px;height:52px;font-size:22px;flex:none}
+.acctcard b{font-size:18px}
+.acctcard div div{color:var(--label2);font-size:14px;word-break:break-all}
+.acctcard .acctst{color:var(--green)}
+.gbtn{width:100%;height:50px;border-radius:12px;background:#fff;color:#1f1f1f;border:1px solid #dadce0;font-weight:600;font-size:16px;display:flex;align-items:center;justify-content:center;gap:10px}
+.glogo{width:20px;height:20px;display:grid}
+.glogo svg{width:20px;height:20px}
+.ldiv{display:flex;align-items:center;gap:10px;color:var(--label2);font-size:13px;margin:-8px 4px 14px}
+.ldiv::before,.ldiv::after{content:"";flex:1;height:.5px;background:var(--sep)}
+.lin2{width:100%;height:48px;border:0;border-radius:10px;background:var(--fill);padding:0 14px;font-size:17px;outline:none;margin-bottom:10px}
+.lin2:focus{box-shadow:0 0 0 2px var(--blue)}
+.lerr{color:var(--red);font-size:14px;margin:-2px 2px 10px;line-height:1.4}
+.lrow2{display:flex;justify-content:space-between;margin-top:6px}
+.wlink{color:var(--blue);font-size:15px;padding:10px 4px;display:block;margin:6px auto 0}
+.lrow2 .wlink{margin:0}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
@@ -835,58 +856,150 @@ function paintStatus(el){
   const who = others.length ? `和 ${others.map(id => cloud.nameOf(id) || '另一位').slice(0, 2).join('、')} 共用 · ` : '';
   if (!IN_CLAUDE){
     const nShared = state.lists.filter(l => l.shared).length;
-    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : '';
-    el.append(...[nShared ? h('span', { class: 'sdot ' + (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') }) : null, h('span', { class: 'stxt' }, txt), h('span', { class: 'shelp' }, '備份')].filter(Boolean));
+    if (fb.configured && fb.loggedIn){
+      const st2 = fb.on ? (fb.synced ? 'synced' : 'syncing') : 'offline';
+      el.append(h('span', { class: 'sdot ' + st2 }), h('span', { class: 'stxt' }, st2 === 'synced' ? '已同步到帳號' : st2 === 'syncing' ? '同步中…' : '暫時離線'),
+        h('span', { class: 'acct' }, fb.photo ? h('img', { src: fb.photo, alt: '', referrerpolicy: 'no-referrer' }) : h('i', {}, (fb.myName || fb.email || '我').slice(0, 1)), fb.myName || '帳號'));
+      return;
+    }
+    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : (fb.configured ? '沒登入：資料只存在這支手機' : '');
+    el.append(...[nShared ? h('span', { class: 'sdot ' + (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') }) : null, h('span', { class: 'stxt' }, txt),
+      fb.configured ? h('span', { class: 'loginbtn' }, '登入') : h('span', { class: 'shelp' }, '備份')].filter(Boolean));
     return;
   }
   el.append(dot, h('span', { class: 'stxt' }, (st === 'synced' || st === 'saving') ? who + T[st] : T[st] || ''), av);
 }
 
 
-/* ---------- GitHub 版：用 Firebase 跟別人共用列表（每一筆分開存，邀請連結加入） ---------- */
+/* ---------- GitHub 版：Firebase 登入、雲端同步、跟別人共用列表 ----------
+   沒登入：自己的列表只存在這支手機；共用列表存在 lists/{id}
+   有登入：自己的列表存在 users/{uid}/lists、users/{uid}/items（只有自己看得到），
+           加入過的共用列表記在 users/{uid}/joined，換手機登入就全部回來 */
 const fb = (() => {
-  let F = null, db = null, me = null, on = false, failed = false, deferred = false;
-  const subs = new Map();          // listId → { un1, un2, gotList, joining }
-  const synced = new Map();        // 'l:'+listId → json；'i:'+itemId → { lid, j }
+  let F = null, A = null, auth = null, db = null, me = null, user = null, on = false, failed = false, deferred = false;
+  const subs = new Map();          // 共用列表 listId → { un1, un2, gotList, joining, quiet }
+  let psubs = [];                  // 個人空間的監聽
+  let personalReady = false, personalSeen = { lists: false, items: false };
+  const joinedWritten = new Set();
+  const synced = new Map();        // 'l:'+id / 'i:'+id → { path, j }
   let myName = (() => { try { return localStorage.getItem('yige-name') || ''; } catch { return ''; } })();
+  const loggedIn = () => !!(user && !user.isAnonymous);
   const stripL = d => stable({ name: d.name || '', color: d.color || 'blue', icon: d.icon || 'list', sections: d.sections || [] });
   const stripI = d => { const { u, by, notified, pending, ...rest } = d; return stable(rest); };
   const itemData = it => { const d = clone(it); delete d.notified; delete d.u; delete d.by; return d; };
+  const D = path => F.doc(db, ...path.split('/'));
   const listRef = id => F.doc(db, 'lists', id);
-  const itemRef = (lid, id) => F.doc(db, 'lists', lid, 'items', id);
-  const onWriteErr = e => { console.warn(e); if (e && /permission/i.test(e.code || '')) showToast('共用伺服器拒絕寫入，請確認 Firebase 規則'); };
+  const onWriteErr = e => { console.warn(e); if (e && /permission/i.test(e.code || '')) showToast('雲端拒絕寫入，請確認 Firebase 安全規則'); };
 
   async function init(){
     if (IN_CLAUDE || !FIREBASE_CONFIG) return;
     try {
       const base = 'https://www.gstatic.com/firebasejs/10.14.1/';
-      const [A, Au, Fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
-      const app = A.initializeApp(FIREBASE_CONFIG);
-      const auth = Au.getAuth(app);
-      const cred = await Au.signInAnonymously(auth);
-      me = cred.user.uid;
+      const [Ap, Au, Fs] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+      const app = Ap.initializeApp(FIREBASE_CONFIG);
+      A = Au; auth = Au.getAuth(app);
+      try { auth.languageCode = 'zh-TW'; } catch {}
       try { db = Fs.initializeFirestore(app, { localCache: Fs.persistentLocalCache() }); } catch { db = Fs.getFirestore(app); }
-      F = Fs; on = true;
-      state.lists.filter(l => l.shared).forEach(l => subscribe(l.id));
-      diff();
-      repaint();
+      F = Fs;
+      try { await Au.getRedirectResult(auth); } catch (e){ await handleCredErr(e).catch(() => {}); }
+      await new Promise(res => { const un = Au.onAuthStateChanged(auth, u => { un(); res(u); }); });
+      if (!auth.currentUser) await Au.signInAnonymously(auth);
+      on = true;
+      startFor(auth.currentUser);
+      Au.onAuthStateChanged(auth, u => { if (!u) return; if (u.uid !== me) startFor(u); else { user = u; repaint(); } });
       handleHash();
     } catch (e){ console.warn(e); failed = true; repaint(); }
   }
   addEventListener('hashchange', () => handleHash());
   function repaint(){ const el = document.getElementById('syncline'); if (el) paintStatus(el); }
 
+  function stopAll(){
+    [...subs.keys()].forEach(unsub);
+    psubs.forEach(u => { try { u(); } catch {} }); psubs = [];
+    synced.clear(); joinedWritten.clear();
+    personalReady = false; personalSeen = { lists: false, items: false };
+  }
+  function startFor(u){
+    stopAll();
+    user = u; me = u.uid;
+    if (loggedIn() && !myName) setName(u.displayName || (u.email || '').split('@')[0] || '');
+    state.lists.filter(l => l.shared).forEach(l => subscribe(l.id, l.pending ? 'quiet' : false));
+    if (loggedIn()) subscribePersonal();
+    diff(); repaint(); requestRender();
+  }
+
+  /* ---------- 個人空間（登入後） ---------- */
+  function subscribePersonal(){
+    const mk = coll => F.onSnapshot(F.collection(db, 'users', me, coll), snap => onPersonal(coll, snap), e => console.warn(e));
+    psubs.push(mk('lists'), mk('items'), mk('joined'));
+  }
+  function onPersonal(coll, snap){
+    const fromServer = !(snap.metadata && snap.metadata.fromCache);
+    let ch = false;
+    for (const c of snap.docChanges()){
+      const id = c.doc.id;
+      if (c.doc.metadata && c.doc.metadata.hasPendingWrites) continue;
+      if (coll === 'joined'){
+        joinedWritten.add(id);
+        if (c.type !== 'removed' && !listById(id)){ joinQuiet(id); ch = true; }
+        continue;
+      }
+      const key = (coll === 'lists' ? 'l:' : 'i:') + id, path = `users/${me}/${coll}/${id}`;
+      if (c.type === 'removed'){
+        const sv = synced.get(key); if (!sv || sv.path !== path) continue;
+        synced.delete(key);
+        if (coll === 'lists') state.lists = state.lists.filter(l => l.id !== id);
+        else { if (edit && edit.id === id) edit = null; state.items = state.items.filter(i => i.id !== id); }
+        ch = true; continue;
+      }
+      const d = c.doc.data(); if (!d) continue;
+      const j = coll === 'lists' ? stripL(d) + ':' + (d.pos ?? 0) : stripI(d);
+      const sv = synced.get(key); if (sv && sv.path === path && sv.j === j) continue;
+      if (coll === 'items' && edit && edit.id === id) continue;
+      synced.set(key, { path, j });
+      if (coll === 'lists'){
+        let l = listById(id); if (!l){ l = { id }; state.lists.push(l); }
+        Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', sections: Array.isArray(d.sections) ? d.sections : [], pos: d.pos ?? 0 });
+        delete l.shared;
+      } else {
+        const it = clone(d); it.id = id;
+        const old = itemById(id);
+        if (old){ const n = old.notified; Object.keys(old).forEach(x => delete old[x]); Object.assign(old, it); old.notified = n; }
+        else state.items.push(it);
+      }
+      ch = true;
+    }
+    if (fromServer && coll !== 'joined' && !personalSeen[coll]){
+      personalSeen[coll] = true;
+      if (personalSeen.lists && personalSeen.items) seedPersonal();
+    }
+    if (ch){ sortLists(); lsSet(state); requestRender(); repaint(); }
+  }
+  /* 第一次登入：帳號裡已經有東西就合併（不會刪掉這支手機上的），沒有就把手機上的全部傳上去 */
+  function seedPersonal(){
+    personalReady = true;
+    const remoteHas = [...synced.entries()].some(([k, v]) => k.startsWith('l:') && v.path.startsWith('users/'));
+    if (remoteHas){
+      state.lists = state.lists.filter(l => l.shared || synced.has('l:' + l.id) || state.items.some(i => i.listId === l.id));
+      if (!state.lists.length) state.lists.push(defaultList());
+      if (route.name === 'list' && !listById(route.id)) route = { name: 'home' };
+    }
+    sortLists(); lsSet(state); diff(); requestRender(); repaint();
+  }
+  function sortLists(){ state.lists.sort((a, b) => (a.shared ? 1 : 0) - (b.shared ? 1 : 0) || (a.pos ?? 1e6) - (b.pos ?? 1e6)); }
+
+  /* ---------- 共用列表 ---------- */
   function subscribe(lid, joining){
     if (!on || subs.has(lid)) return;
-    const s = { gotList: false, joining: !!joining };
+    const s = { gotList: false, joining: !!joining, quiet: joining === 'quiet' };
     subs.set(lid, s);
     s.un1 = F.onSnapshot(listRef(lid), snap => {
       if (!snap.exists()){
         if (snap.metadata.fromCache) return;
         if (s.gotList || s.joining){
           const l = listById(lid);
-          const msg = s.joining && !s.gotList ? '邀請連結無效，或這個列表已被刪除' : `「${l ? l.name : '列表'}」已被其他人刪除`;
-          drop(lid); showToast(msg);
+          const msg = s.quiet ? '' : s.joining && !s.gotList ? '邀請連結無效，或這個列表已被刪除' : `「${l ? l.name : '列表'}」已被其他人刪除`;
+          drop(lid); if (msg) showToast(msg);
         }
         return;
       }
@@ -895,31 +1008,33 @@ const fb = (() => {
       s.gotList = true; s.joining = false;
       if (!l){ l = { id: lid, shared: true, sections: [] }; state.lists.push(l); }
       l.members = d.members || {};
-      const j = stripL(d);
-      if (l.pending || (!snap.metadata.hasPendingWrites && synced.get('l:' + lid) !== j)){
-        synced.set('l:' + lid, j);
+      const j = stripL(d), key = 'l:' + lid, path = 'lists/' + lid;
+      const sv = synced.get(key);
+      if (l.pending || (!snap.metadata.hasPendingWrites && !(sv && sv.j === j))){
+        synced.set(key, { path, j });
         Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', sections: Array.isArray(d.sections) ? d.sections : [], shared: true });
         delete l.pending;
       }
       if (me && myName && l.members[me] !== myName) F.setDoc(listRef(lid), { members: { [me]: myName } }, { merge: true }).catch(onWriteErr);
+      markJoined(lid);
       lsSet(state); requestRender(); repaint();
-    }, e => { console.warn(e); if (s.joining){ drop(lid); showToast('打不開這個邀請，請確認網路或連結'); } });
+    }, e => { console.warn(e); if (s.joining){ drop(lid); if (!s.quiet) showToast('打不開這個邀請，請確認網路或連結'); } });
     s.un2 = F.onSnapshot(F.collection(db, 'lists', lid, 'items'), snap => {
       let ch = false;
       snap.docChanges().forEach(c => {
-        const id = c.doc.id, k = 'i:' + id;
+        const id = c.doc.id, k = 'i:' + id, path = `lists/${lid}/items/${id}`;
         if (c.doc.metadata && c.doc.metadata.hasPendingWrites) return;
         if (c.type === 'removed'){
-          const sv = synced.get(k); if (!sv || sv.lid !== lid) return;
+          const sv = synced.get(k); if (!sv || sv.path !== path) return;
           synced.delete(k);
           if (edit && edit.id === id) edit = null;
           state.items = state.items.filter(i => i.id !== id); ch = true; return;
         }
         const d = c.doc.data(); if (!d) return;
         const j = stripI({ ...d, listId: lid });
-        const sv = synced.get(k); if (sv && sv.lid === lid && sv.j === j) return;
+        const sv = synced.get(k); if (sv && sv.path === path && sv.j === j) return;
         if (edit && edit.id === id) return;
-        synced.set(k, { lid, j });
+        synced.set(k, { path, j });
         const it = clone(d); it.id = id; it.listId = lid;
         const old = itemById(id);
         if (old){ const n = old.notified; Object.keys(old).forEach(x => delete old[x]); Object.assign(old, it); old.notified = n; }
@@ -929,12 +1044,23 @@ const fb = (() => {
       if (ch){ lsSet(state); requestRender(); }
     }, e => console.warn(e));
   }
+  function markJoined(lid){
+    if (!loggedIn() || joinedWritten.has(lid)) return;
+    joinedWritten.add(lid);
+    F.setDoc(F.doc(db, 'users', me, 'joined', lid), { at: Date.now() }, { merge: true }).catch(onWriteErr);
+  }
+  function unmarkJoined(lid){
+    if (!loggedIn()) return;
+    joinedWritten.delete(lid);
+    F.deleteDoc(F.doc(db, 'users', me, 'joined', lid)).catch(() => {});
+  }
   function unsub(lid){ const s = subs.get(lid); if (!s) return; try { s.un1 && s.un1(); s.un2 && s.un2(); } catch {} subs.delete(lid); }
   /* 只從這支手機拿掉（不影響別人） */
   function drop(lid){
     unsub(lid);
     synced.delete('l:' + lid);
-    for (const [k, v] of [...synced]) if (k.startsWith('i:') && v.lid === lid) synced.delete(k);
+    for (const [k, v] of [...synced]) if (k.startsWith('i:') && v.path.startsWith(`lists/${lid}/`)) synced.delete(k);
+    unmarkJoined(lid);
     state.lists = state.lists.filter(l => l.id !== lid);
     state.items = state.items.filter(i => i.listId !== lid);
     if (!state.lists.length) state.lists.push(defaultList());
@@ -942,42 +1068,57 @@ const fb = (() => {
     lsSet(state); requestRender(); repaint();
   }
 
-  /* 找出跟雲端不一樣的那幾筆，只寫那幾筆 */
+  /* ---------- 找出跟雲端不一樣的那幾筆，只寫那幾筆 ---------- */
+  function pathL(l){
+    if (l.pending) return null;
+    if (l.shared) return 'lists/' + l.id;
+    if (loggedIn() && personalReady) return `users/${me}/lists/${l.id}`;
+    return null;
+  }
+  function pathI(it){
+    const l = listById(it.listId); if (!l) return null;
+    if (l.shared) return l.pending ? null : `lists/${l.id}/items/${it.id}`;
+    if (loggedIn() && personalReady) return `users/${me}/items/${it.id}`;
+    return null;
+  }
   function diff(){
     if (!on) return;
-    const now = Date.now();
-    const sh = new Set(state.lists.filter(l => l.shared && !l.pending).map(l => l.id));
-    const pend = new Set(state.lists.filter(l => l.pending).map(l => l.id));
-    const seenL = new Set(), seenI = new Set();
-    state.lists.forEach(l => {
-      if (!l.shared) return;
-      const k = 'l:' + l.id; seenL.add(k);
-      if (!subs.has(l.id)) subscribe(l.id);
-      if (l.pending) return;
-      const j = stripL(l);
-      if (synced.get(k) !== j){
-        synced.set(k, j);
+    const now = Date.now(), seen = new Set();
+    state.lists.forEach((l, i) => {
+      const k = 'l:' + l.id;
+      if (l.shared && !subs.has(l.id)) subscribe(l.id, l.pending ? 'quiet' : false);
+      if (l.pending){ seen.add(k); return; }
+      const path = pathL(l); if (!path) return;
+      seen.add(k);
+      const j = l.shared ? stripL(l) : stripL(l) + ':' + i;
+      const sv = synced.get(k);
+      if (sv && sv.path !== path) F.deleteDoc(D(sv.path)).catch(onWriteErr);
+      if (!sv || sv.path !== path || sv.j !== j){
+        synced.set(k, { path, j });
         const d = { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], u: now, by: me };
-        if (myName) d.members = { [me]: myName };
-        F.setDoc(listRef(l.id), d, { merge: true }).catch(onWriteErr);
+        if (l.shared){ if (myName) d.members = { [me]: myName }; F.setDoc(D(path), d, { merge: true }).catch(onWriteErr); }
+        else { d.pos = i; l.pos = i; F.setDoc(D(path), d).catch(onWriteErr); }
       }
+      if (l.shared) markJoined(l.id);
     });
     state.items.forEach(it => {
-      if (pend.has(it.listId)) { seenI.add('i:' + it.id); return; }
-      const k = 'i:' + it.id, sv = synced.get(k);
-      if (!sh.has(it.listId)){ return; }
-      seenI.add(k);
-      const d = itemData(it); const j = stripI(d);
-      if (sv && sv.lid !== it.listId){ F.deleteDoc(itemRef(sv.lid, it.id)).catch(onWriteErr); }
-      if (!sv || sv.lid !== it.listId || sv.j !== j){
-        synced.set(k, { lid: it.listId, j });
+      const k = 'i:' + it.id, l = listById(it.listId);
+      if (l && l.pending){ seen.add(k); return; }
+      const path = pathI(it); if (!path) return;
+      seen.add(k);
+      const d = itemData(it), j = stripI(d), sv = synced.get(k);
+      if (sv && sv.path !== path) F.deleteDoc(D(sv.path)).catch(onWriteErr);
+      if (!sv || sv.path !== path || sv.j !== j){
+        synced.set(k, { path, j });
         it.by = me;
-        F.setDoc(itemRef(it.listId, it.id), { ...d, u: now, by: me }).catch(onWriteErr);
+        F.setDoc(D(path), { ...d, u: now, by: me }).catch(onWriteErr);
       }
     });
     for (const [k, v] of [...synced]){
-      if (k.startsWith('i:') && !seenI.has(k)){ synced.delete(k); F.deleteDoc(itemRef(v.lid, k.slice(2))).catch(onWriteErr); }
-      if (k.startsWith('l:') && !seenL.has(k)){ synced.delete(k); unsub(k.slice(2)); F.deleteDoc(listRef(k.slice(2))).catch(onWriteErr); }
+      if (seen.has(k)) continue;
+      synced.delete(k);
+      if (k.startsWith('l:') && v.path.startsWith('lists/')){ unsub(k.slice(2)); unmarkJoined(k.slice(2)); }
+      F.deleteDoc(D(v.path)).catch(onWriteErr);
     }
   }
   function requestRender(){ if (edit || dragging || swiping || sheetOpen()) deferred = true; else render(); }
@@ -987,11 +1128,11 @@ const fb = (() => {
   function strongId(){ const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('').slice(0, 20); }
   function linkFor(lid){ return location.origin + location.pathname + '#join-' + lid; }
   function share(lid){
-    let l = listById(lid); if (!l) return null;
+    const l = listById(lid); if (!l) return null;
     if (!l.shared){
       // 換一個很長、猜不到的編號再上傳
       const nid = strongId(), old = l.id;
-      l.id = nid; l.shared = true;
+      l.id = nid; l.shared = true; delete l.pos;
       state.items.forEach(i => { if (i.listId === old) i.listId = nid; });
       if (state.showDone[old] !== undefined){ state.showDone[nid] = state.showDone[old]; delete state.showDone[old]; }
       if (route.name === 'list' && route.id === old) route = { name: 'list', id: nid };
@@ -1006,11 +1147,16 @@ const fb = (() => {
     lsSet(state); render(); scrollTo(0, 0);
     subscribe(lid, true);
   }
+  function joinQuiet(lid){
+    if (listById(lid)) return;
+    state.lists.push({ id: lid, name: '載入中…', color: 'blue', icon: 'list', sections: [], shared: true, pending: true });
+    subscribe(lid, 'quiet');
+  }
   function handleHash(){
     const m = location.hash.match(/^#join-([A-Za-z0-9]{8,40})$/);
     if (!m) return;
     try { history.replaceState(null, '', location.pathname + location.search); } catch {}
-    if (!on){ showToast(failed ? '連不上共用伺服器，請稍後再開一次連結' : '共用功能還沒設定好'); return; }
+    if (!on){ showToast(failed ? '連不上雲端，請稍後再開一次連結' : '共用功能還沒設定好'); return; }
     const lid = m[1];
     if (!myName) askName(() => join(lid), '加入共用列表'); else join(lid);
   }
@@ -1022,7 +1168,7 @@ const fb = (() => {
   }
   function setName(n){
     myName = n; try { localStorage.setItem('yige-name', n); } catch {}
-    if (on) state.lists.filter(l => l.shared && !l.pending).forEach(l => F.setDoc(listRef(l.id), { members: { [me]: n } }, { merge: true }).catch(onWriteErr));
+    if (on && me) state.lists.filter(l => l.shared && !l.pending).forEach(l => F.setDoc(listRef(l.id), { members: { [me]: n } }, { merge: true }).catch(onWriteErr));
   }
   function nameOf(id, lid){
     if (!id) return '';
@@ -1032,8 +1178,73 @@ const fb = (() => {
     for (const l of state.lists) if (l.members && l.members[id]) return l.members[id];
     return '';
   }
+
+  /* ---------- 登入／註冊／登出 ---------- */
+  const ERR = {
+    'auth/invalid-email': 'Email 格式不對', 'auth/missing-email': '請輸入 Email', 'auth/missing-password': '請輸入密碼',
+    'auth/weak-password': '密碼至少要 6 個字', 'auth/email-already-in-use': '這個 Email 已經註冊過了，請直接「登入」',
+    'auth/invalid-credential': 'Email 或密碼不對', 'auth/invalid-login-credentials': 'Email 或密碼不對', 'auth/wrong-password': 'Email 或密碼不對',
+    'auth/user-not-found': '找不到這個帳號，請先「註冊」', 'auth/too-many-requests': '試太多次了，請等一下再試',
+    'auth/network-request-failed': '網路連不上，請稍後再試', 'auth/operation-not-allowed': '這種登入方式還沒在 Firebase 開啟（第 1、2 步）',
+    'auth/unauthorized-domain': '這個網址還沒加進 Firebase 的「授權網域」（第 3 步）', 'auth/popup-closed-by-user': '', 'auth/cancelled-popup-request': '',
+    'auth/user-disabled': '這個帳號已被停用',
+  };
+  const errMsg = e => (e && e.code in ERR) ? ERR[e.code] : ('登入失敗：' + ((e && (e.code || e.message)) || '未知錯誤'));
+  async function handleCredErr(e){
+    if (e && (e.code === 'auth/credential-already-in-use' || e.code === 'auth/email-already-in-use')){
+      const c = A.GoogleAuthProvider.credentialFromError(e);
+      if (c){ await A.signInWithCredential(auth, c); return true; }
+    }
+    throw e;
+  }
+  async function loginGoogle(){
+    const p = new A.GoogleAuthProvider();
+    p.setCustomParameters && p.setCustomParameters({ prompt: 'select_account' });
+    try {
+      if (auth.currentUser && auth.currentUser.isAnonymous) await A.linkWithPopup(auth.currentUser, p);
+      else await A.signInWithPopup(auth, p);
+    } catch (e){
+      if (['auth/popup-blocked', 'auth/operation-not-supported-in-this-environment'].includes(e && e.code)){
+        if (auth.currentUser && auth.currentUser.isAnonymous) await A.linkWithRedirect(auth.currentUser, p); else await A.signInWithRedirect(auth, p);
+        return;
+      }
+      await handleCredErr(e);
+    }
+    afterLogin();
+  }
+  async function loginEmail(email, pw){ await A.signInWithEmailAndPassword(auth, email, pw); afterLogin(); }
+  async function signupEmail(email, pw){
+    if (auth.currentUser && auth.currentUser.isAnonymous) await A.linkWithCredential(auth.currentUser, A.EmailAuthProvider.credential(email, pw));
+    else await A.createUserWithEmailAndPassword(auth, email, pw);
+    afterLogin();
+  }
+  async function resetPw(email){ await A.sendPasswordResetEmail(auth, email); }
+  function afterLogin(){
+    const u = auth.currentUser; if (!u) return;
+    if (u.uid !== me) startFor(u);
+    else {
+      user = u;
+      if (!myName) setName(u.displayName || (u.email || '').split('@')[0] || '');
+      if (!psubs.length && loggedIn()) subscribePersonal();
+      diff(); repaint(); render();
+    }
+  }
+  async function logout(){
+    stopAll();
+    state = blank(); edit = null; selectMode = null; route = { name: 'home' };
+    lsSet(state);
+    myName = ''; try { localStorage.removeItem('yige-name'); } catch {}
+    render();
+    await A.signOut(auth);
+    await A.signInAnonymously(auth);
+  }
   return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf,
-    get on(){ return on; }, get failed(){ return failed; }, get me(){ return me; }, get myName(){ return myName; }, get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; } };
+    loginGoogle, loginEmail, signupEmail, resetPw, logout, errMsg,
+    get on(){ return on; }, get failed(){ return failed; }, get me(){ return me; }, get myName(){ return myName; },
+    get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; }, get loggedIn(){ return loggedIn(); },
+    get email(){ return user && user.email || ''; }, get photo(){ return user && user.photoURL || ''; },
+    get provider(){ return user && user.providerData && user.providerData[0] ? user.providerData[0].providerId : ''; },
+    get synced(){ return personalReady; } };
 })();
 const SYNC = {
   get me(){ return IN_CLAUDE ? cloud.me : fb.me; },
@@ -1424,7 +1635,7 @@ function renderHome(){
   sIn.addEventListener('input', () => { query = sIn.value; clr.hidden = !query; fillHome(main); });
   sIn.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); sIn.blur(); } });
   clr.onclick = () => { query = ''; sIn.value = ''; clr.hidden = true; fillHome(main); };
-  const sl = h(IN_CLAUDE ? 'div' : 'button', { class: 'syncline', id: 'syncline', onclick: IN_CLAUDE ? null : openBackup });
+  const sl = h(IN_CLAUDE ? 'div' : 'button', { class: 'syncline', id: 'syncline', onclick: IN_CLAUDE ? null : () => (fb.configured ? (fb.loggedIn ? openAccount() : openLogin()) : openBackup()) });
   paintStatus(sl);
   v.append(h('div', { class: 'navrow' }), sl, h('div', { class: 'search' }, svgEl(UI.search), sIn, clr), main);
   fillHome(main);
@@ -1437,7 +1648,8 @@ function welcomeCard(){
     h('div', { class: 'wt' }, '👋 歡迎使用一格記事'),
     h('div', { class: 'ws' }, '把要做的事一件一件記下來，做完就打勾。'),
     h('button', { class: 'wbtn primary', onclick: () => { go({ name: 'list', id: firstList().id }); addAtEnd(); } }, h('span', { html: UI.plus, class: 'wi' }), '新增第一件事'),
-    h('button', { class: 'wbtn', onclick: () => pasteBig() }, h('span', { html: UI.copy, class: 'wi' }), '貼上一大段文字，自動拆開'));
+    h('button', { class: 'wbtn', onclick: () => pasteBig() }, h('span', { html: UI.copy, class: 'wi' }), '貼上一大段文字，自動拆開'),
+    fb.configured && !fb.loggedIn ? h('button', { class: 'wlink', onclick: () => openLogin() }, '已經有帳號？登入') : null);
 }
 /* 貼上一大段：能讀剪貼簿就直接拆，不能就打開新增視窗讓他貼 */
 async function pasteBig(ctx){
@@ -2281,6 +2493,66 @@ function importText(text){
   commit();
   showToast(`已還原 ${r.items.length} 個提醒事項`, [{ label: '復原', fn: undo }]);
   return true;
+}
+/* ---------- 登入 ---------- */
+function openLogin(mode = 'login'){
+  if (!fb.on){ showToast(fb.failed ? '連不上雲端，請確認網路後重新打開' : '正在連線，請稍等一下再按'); return; }
+  const err = h('div', { class: 'lerr', hidden: true });
+  const say = m => { err.textContent = m; err.hidden = !m; };
+  const busy = (b, on) => { b.disabled = on; b.style.opacity = on ? .6 : ''; };
+  const g = h('button', { class: 'gbtn' }, h('span', { class: 'glogo', html: '<svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>' }), '用 Google 帳號登入');
+  g.onclick = async () => {
+    say(''); busy(g, true);
+    try { await fb.loginGoogle(); closeSheet(); showToast(`已登入：${fb.myName || fb.email}`); }
+    catch (e){ console.warn(e); say(fb.errMsg(e)); }
+    busy(g, false);
+  };
+  const email = h('input', { class: 'lin2', type: 'email', placeholder: 'Email', autocomplete: 'email', inputmode: 'email', autocapitalize: 'off' });
+  const pw = h('input', { class: 'lin2', type: 'password', placeholder: mode === 'signup' ? '設定密碼（至少 6 個字）' : '密碼', autocomplete: mode === 'signup' ? 'new-password' : 'current-password' });
+  const main = h('button', { class: 'wbtn primary' }, mode === 'signup' ? '註冊並登入' : '登入');
+  main.onclick = async () => {
+    const em = email.value.trim(), p = pw.value;
+    if (!em || !p){ say('請輸入 Email 和密碼'); return; }
+    say(''); busy(main, true);
+    try {
+      if (mode === 'signup') await fb.signupEmail(em, p); else await fb.loginEmail(em, p);
+      closeSheet(); showToast(mode === 'signup' ? '註冊好了，已登入' : `已登入：${fb.myName || em}`);
+    } catch (e){ console.warn(e); say(fb.errMsg(e)); }
+    busy(main, false);
+  };
+  pw.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); main.click(); } });
+  const switcher = h('button', { class: 'wlink', onclick: () => { closeSheet(); setTimeout(() => openLogin(mode === 'signup' ? 'login' : 'signup'), 330); } },
+    mode === 'signup' ? '已經有帳號？改用登入' : '還沒有帳號？用 Email 註冊');
+  const forgot = mode === 'login' ? h('button', { class: 'wlink', onclick: async () => {
+    const em = email.value.trim(); if (!em){ say('先在上面輸入你的 Email，再按「忘記密碼」'); return; }
+    try { await fb.resetPw(em); say(''); showToast('已寄出重設密碼的信，請到信箱查看'); } catch (e){ say(fb.errMsg(e)); }
+  } }, '忘記密碼') : null;
+  const body = h('div', {},
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 14px' } }, '登入後，資料會存在你的帳號裡：換手機、清掉瀏覽器都不會不見，手機和電腦也會同步。這支手機上現在的東西會自動搬進帳號。'),
+    h('div', { class: 'fgroup', style: { padding: '14px' } }, g),
+    h('div', { class: 'ldiv' }, h('span', {}, '或用 Email')),
+    h('div', { class: 'fgroup', style: { padding: '14px' } }, email, pw, err, main, h('div', { class: 'lrow2' }, switcher, forgot)));
+  openSheet({ title: mode === 'signup' ? '註冊帳號' : '登入', left: '', right: '關閉', body });
+}
+function openAccount(){
+  const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: fn }));
+  const later = fn => () => { closeSheet(); setTimeout(fn, 330); };
+  const body = h('div', {},
+    h('div', { class: 'fgroup acctcard' },
+      fb.photo ? h('img', { src: fb.photo, alt: '', referrerpolicy: 'no-referrer' }) : h('i', {}, (fb.myName || fb.email || '我').slice(0, 1)),
+      h('div', {}, h('b', {}, fb.myName || '（還沒設定名字）'), h('div', {}, fb.email || ''), h('div', { class: 'acctst' }, fb.synced ? '✓ 已同步到帳號' : '同步中…'))),
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
+      I(UI.person, '改名字（一起記的人會看到）', later(() => askName(() => render()))),
+      I(UI.down, '備份／還原', later(openBackup)))),
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
+      I(UI.back.replace('style="width:12px;height:20px"', 'style="width:20px;height:20px"'), '登出', later(confirmLogout), 'red'))));
+  openSheet({ title: '帳號', left: '', right: '完成', body });
+}
+function confirmLogout(){
+  openSheet({ title: '登出？', left: '', right: '', body: h('div', {},
+    h('p', { class: 'cfm' }, '登出後，這支手機上的資料會清掉（帳號裡的都還在）。下次登入同一個帳號，全部都會回來。'),
+    h('button', { class: 'bigbtn red', onclick: async () => { closeSheet(); try { await fb.logout(); showToast('已登出'); } catch (e){ showToast('登出失敗，請再試一次'); } } }, '登出'),
+    h('button', { class: 'bigbtn', onclick: closeSheet }, '取消')) });
 }
 function openBackup(){
   const n = state.items.length;
