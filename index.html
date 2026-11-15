@@ -215,7 +215,7 @@ input,textarea,select{font:inherit;color:inherit}
 .sheet{position:fixed;left:0;right:0;bottom:0;z-index:51;max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px 12px 0 0;transform:translateY(105%);transition:transform .32s cubic-bezier(.2,.8,.2,1);max-height:calc(var(--vvh, 100dvh) - var(--sat) / var(--z, 1) - 12px);display:flex;flex-direction:column}
 .sheet.show{transform:none}
 .sheet{bottom:var(--kb, 0px)}
-body.kb-open .toolbar{display:none}
+body.kb-open .toolbar,body.typing .toolbar{display:none}
 body.kb-open .toast{bottom:calc(var(--kb, 0px) + 12px)}
 body.kb-open .sheet .bigic{display:none}
 body.kb-open .sheet{border-radius:12px}
@@ -408,6 +408,12 @@ if (typeof module !== 'undefined') module.exports = Splitter;
   fit();
   let t; addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 150); });
   addEventListener('orientationchange', () => setTimeout(fit, 300));
+})();
+/* 正在打字時，把最下面那排按鈕藏起來，不要擋住 */
+(() => {
+  const isField = el => el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(checkbox|radio|file|button|submit|date|time)$/i.test(el.type)));
+  addEventListener('focusin', e => { if (isField(e.target)) document.body.classList.add('typing'); });
+  addEventListener('focusout', () => setTimeout(() => { if (!isField(document.activeElement)) document.body.classList.remove('typing'); }, 0));
 })();
 /* 鍵盤跳出來時：把底部視窗移到鍵盤上面，不要被擋住 */
 (() => {
