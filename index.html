@@ -116,7 +116,9 @@ input,textarea,select{font:inherit;color:inherit}
 .title{white-space:pre-wrap;word-break:break-word;overflow-wrap:anywhere;min-height:22px}
 .row.done .title{color:var(--label2)}
 .prio{color:var(--c);font-weight:600;margin-right:3px}
-.notes{color:var(--label2);font-size:15px;margin-top:2px;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.notes{color:var(--label2);font-size:14px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hl{color:var(--c, var(--blue));font-weight:600}
+.row.flagged .title{font-weight:600}
 .meta{color:var(--label2);font-size:15px;margin-top:2px;display:flex;flex-wrap:wrap;align-items:center;gap:0 6px}
 .meta .od{color:var(--red)}
 .meta svg{width:13px;height:13px;vertical-align:-1px}
@@ -1083,7 +1085,7 @@ const SMART = {
   today:     { name: '今天',   color: 'var(--blue)',     icon: 'cal' },
   scheduled: { name: '已排程', color: 'var(--red)',      icon: 'cal' },
   all:       { name: '全部',   color: 'var(--darkgrey)', icon: 'tray' },
-  flagged:   { name: '已標記', color: 'var(--orange)',   icon: 'flag' },
+  flagged:   { name: '重點',   color: 'var(--orange)',   icon: 'flag' },
   completed: { name: '已完成', color: 'var(--grey)',     icon: 'check' },
   mine:      { name: '指派給我', color: 'var(--green)',   icon: 'person' },
 };
@@ -1352,6 +1354,7 @@ function h(tag, props = {}, ...kids){
 
 function render(){
   rendering = true;
+  prefixCache.clear();
   try {
     const app = $('#app');
     app.textContent = '';
@@ -1604,6 +1607,49 @@ function onScroll(){
 addEventListener('scroll', onScroll, { passive: true });
 
 /* ---------- 一列提醒事項 ---------- */
+/* 「」『』【】和 **粗體** 裡的字當作重點，用顏色標出來 */
+function withHighlights(text){
+  const frag = document.createDocumentFragment();
+  const re = /(「[^」\n]{1,40}」|『[^』\n]{1,40}』|【[^】\n]{1,40}】|\*\*[^*\n]{1,40}\*\*)/g;
+  let last = 0, m;
+  while ((m = re.exec(text))){
+    if (m.index > last) frag.append(text.slice(last, m.index));
+    const t = m[0].startsWith('**') ? m[0].slice(2, -2) : m[0];
+    frag.append(h('span', { class: 'hl' }, t));
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) frag.append(text.slice(last));
+  return frag;
+}
+/* 同一個列表裡，備忘錄開頭都一樣的那段先省略，只顯示不一樣的重點 */
+const prefixCache = new Map();
+function sharedPrefix(listId){
+  if (prefixCache.has(listId)) return prefixCache.get(listId);
+  const ns = state.items.filter(i => i.listId === listId && (i.notes || '').trim()).map(i => i.notes.trim());
+  let p = '';
+  if (ns.length >= 2){
+    p = ns[0];
+    for (const n of ns){ let k = 0; while (k < p.length && k < n.length && p[k] === n[k]) k++; p = p.slice(0, k); if (!p) break; }
+    // 切在標點或括號前，不要切在字中間
+    let cut = -1;
+    for (let k = p.length - 1; k >= 0; k--){
+      const ch = p[k];
+      if ('「『【'.includes(ch)){ cut = k; break; }
+      if ('，、。：:；; '.includes(ch)){ cut = k + 1; break; }
+    }
+    p = cut >= 8 ? p.slice(0, cut) : '';
+  }
+  prefixCache.set(listId, p);
+  return p;
+}
+function notesPreview(it){
+  let n = (it.notes || '').trim().replace(/\s*\n\s*/g, ' ');
+  const p = sharedPrefix(it.listId);
+  if (p && n.startsWith(p) && n.length > p.length) n = '…' + n.slice(p.length);
+  const d = h('div', { class: 'notes' });
+  d.append(withHighlights(n));
+  return d;
+}
 function rowMeta(it, vm, isEditing){
   const meta = h('div', { class: 'meta' });
   const parts = [];
@@ -1631,7 +1677,7 @@ function renderRow(it, vm){
   const l = listById(it.listId);
   const c = colorOf(l);
   const isEditing = !selectMode && edit && edit.id === it.id;
-  const li = h('li', { class: 'row' + (it.done ? ' done' : '') + (isEditing ? ' editing' : '') + (selectMode ? ' selecting' : ''), 'data-id': it.id });
+  const li = h('li', { class: 'row' + (it.done ? ' done' : '') + (it.flagged && !it.done ? ' flagged' : '') + (isEditing ? ' editing' : '') + (selectMode ? ' selecting' : ''), 'data-id': it.id });
   li.style.setProperty('--c', c);
 
   if (selectMode){
@@ -1639,9 +1685,9 @@ function renderRow(it, vm){
     const circle = h('span', { class: 'circle' + (on ? ' sel' : ''), html: '<i></i>' + `<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5.5 12.5 4 4 9-9"/></svg>` });
     const t = h('div', { class: 'title' });
     if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
-    t.append(document.createTextNode(it.title));
+    t.append(withHighlights(it.title));
     const txt = h('div', { class: 'rtext' }, t);
-    if (it.notes) txt.append(h('div', { class: 'notes' }, it.notes));
+    if (it.notes && it.notes.trim()) txt.append(notesPreview(it));
     const m = rowMeta(it, vm); if (m) txt.append(m);
     const fg = h('div', { class: 'fg', role: 'checkbox', 'aria-checked': on, tabindex: 0 }, circle, h('div', { class: 'rbody' }, txt, it.flagged ? svgEl(UI.flag, 'flagic') : null));
     fg.addEventListener('click', () => { if (selectMode.has(it.id)) selectMode.delete(it.id); else selectMode.add(it.id); render(); });
@@ -1652,7 +1698,7 @@ function renderRow(it, vm){
   const acts = h('div', { class: 'acts' },
     h('button', { class: 'a-info', html: UI.info + '<span>詳細資訊</span>', onclick: () => { closeSwipes(); openDetail(it.id); } }),
     h('button', { class: 'a-copy', html: UI.copy + '<span>複製</span>', onclick: () => { closeSwipes(); openCopy(it.id); } }),
-    h('button', { class: 'a-flag', html: UI.flag + `<span>${it.flagged ? '取消標記' : '標記'}</span>`, onclick: () => { it.flagged = !it.flagged; closeSwipes(); commit(); } }),
+    h('button', { class: 'a-flag', html: UI.flag + `<span>${it.flagged ? '取消重點' : '設為重點'}</span>`, onclick: () => { it.flagged = !it.flagged; closeSwipes(); commit(); } }),
     h('button', { class: 'a-del', html: UI.trash + '<span>刪除</span>', onclick: () => deleteItems([it.id], `已刪除「${trunc(it.title, 12)}」`) }));
   const circle = h('button', { class: 'circle', role: 'checkbox', 'aria-checked': it.done, 'aria-label': (it.done ? '取消完成：' : '完成：') + it.title, html: '<i></i>' });
   circle.addEventListener('pointerdown', e => { if (edit) e.preventDefault(); });
@@ -1666,9 +1712,9 @@ function renderRow(it, vm){
   } else {
     const t = h('div', { class: 'title' });
     if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
-    t.append(document.createTextNode(it.title));
+    t.append(withHighlights(it.title));
     txt.append(t);
-    if (it.notes) txt.append(h('div', { class: 'notes' }, it.notes));
+    if (it.notes && it.notes.trim()) txt.append(notesPreview(it));
     const m = rowMeta(it, vm); if (m) txt.append(m);
   }
   const body = h('div', { class: 'rbody' }, txt,
@@ -1758,7 +1804,7 @@ function chipsFor(cur, onPatch, onMore){
   const box = h('div', { class: 'chips' },
     mk('今天', t), mk('明天', tm),
     h('button', { class: 'chip' + (d && d !== t && d !== tm ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm ? fmtDay(d) : '日期') + '</span>', onpointerdown: keep, onclick: onMore }),
-    h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag, 'aria-label': cur.flagged ? '取消標記' : '標記', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
+    h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag + '<span>重點</span>', 'aria-label': cur.flagged ? '取消重點' : '設為重點', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
   return box;
 }
 function autoGrow(ta){ ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
@@ -1980,7 +2026,7 @@ function reminderForm(w, { isNew, onChange }){
     split.hidden = !w.res;
     if (w.res){
       split.innerHTML = '';
-      split.append(h('span', {}, '會拆成 ', h('b', {}, `${nItems} 個提醒事項`), heads.length ? `，放進 ${heads.length} 個分類` : '', '，都套用下面的日期和旗標'));
+      split.append(h('span', {}, '會拆成 ', h('b', {}, `${nItems} 個提醒事項`), heads.length ? `，放進 ${heads.length} 個分類` : '', '，都套用下面的日期和重點'));
       const ol = h('ol', {});
       res.forEach(x => ol.append(x.kind === 'header' ? h('li', { style: { listStyle: 'none', marginLeft: '-20px', fontWeight: 700, marginTop: '6px', color: 'var(--blue)' } }, '📁 ' + x.text) : h('li', {}, x.text)));
       split.append(ol);
@@ -2024,7 +2070,7 @@ function reminderForm(w, { isNew, onChange }){
   wrap.append(h('div', { class: 'fgroup' }, dateRow, dateEdit, timeRow, timeEdit, repRow));
 
   // 旗標、優先順序、列表
-  const flagSw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': '旗標' }); flagSw.checked = !!w.flagged;
+  const flagSw = h('input', { type: 'checkbox', class: 'switch', 'aria-label': '重點' }); flagSw.checked = !!w.flagged;
   flagSw.onchange = () => { w.flagged = flagSw.checked; };
   const priSel = h('select', { 'aria-label': '優先順序' }, ...[['0', '無'], ['1', '低'], ['2', '中'], ['3', '高']].map(([v, t]) => h('option', { value: v }, t)));
   priSel.value = String(w.priority || 0); priSel.onchange = () => { w.priority = Number(priSel.value); };
@@ -2055,7 +2101,7 @@ function reminderForm(w, { isNew, onChange }){
   asgSel.onchange = () => { w.assignee = asgSel.value || ''; };
   listSel.value = w.listId; listSel.onchange = () => { w.listId = listSel.value; fillSec(); fillAsg(); };
   wrap.append(h('div', { class: 'fgroup' },
-    h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--orange)' }, html: UI.flag }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '旗標'), flagSw)),
+    h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--orange)' }, html: UI.flag }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '重點'), flagSw)),
     h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: 'var(--red)' }, html: UI.excl }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '優先順序'), priSel, svgEl(UI.chev))),
     h('div', { class: 'f' }, h('span', { class: 'fic', style: { background: colorOf(listById(w.listId)) }, html: ICONS.list }), h('span', { class: 'fin' }, h('span', { class: 'fl' }, '列表'), listSel, svgEl(UI.chev))),
     secRow, asgRow));
@@ -2336,7 +2382,7 @@ function openCopy(id, withMore){
   const more = withMore ? h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
     I(UI.info, '詳細資訊', later(() => openDetail(id))),
     I(UI.folder, '移到分類', later(() => openMove([id]))),
-    I(UI.flag, it.flagged ? '取消標記' : '標記', () => { it.flagged = !it.flagged; commit(); }),
+    I(UI.flag, it.flagged ? '取消重點' : '設為重點', () => { it.flagged = !it.flagged; commit(); }),
     I(UI.trash, '刪除', () => deleteItems([id], `已刪除「${trunc(it.title, 12)}」`), 'red'))) : null;
   openSheet({ title: trunc(it.title, 16), left: '', right: '完成', body: h('div', {},
     notes ? h('div', { class: 'fgroup', style: { padding: '12px 14px', fontSize: '15px', color: 'var(--label2)', whiteSpace: 'pre-wrap', maxHeight: '26vh', overflow: 'auto', userSelect: 'text', WebkitUserSelect: 'text' } }, notes) : null,

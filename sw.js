@@ -1,5 +1,5 @@
 // 一格記事：離線快取。改版時把版本號加一，手機下次打開就會更新。
-const CACHE = 'yige-v7';
+const CACHE = 'yige-v8';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
