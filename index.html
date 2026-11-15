@@ -452,7 +452,7 @@ const Splitter = (() => {
     }
     const items = parts.map(clean).filter(x => x.text && !JUNK_RE.test(x.text));
     return items.map(x => {
-      const isColon = /[:：]$/.test(x.text) && x.text.length <= 30 && items.length > 1;
+      const isColon = /[:：]$/.test(x.text) && x.text.length <= 16 && !/[，,、。「」『』【】（）()]/.test(x.text) && items.length > 1;
       const isWord = HEADER_WORDS.test(x.text.replace(/[:：]$/, '').trim()) && items.length > 1;
       return (isColon || isWord) ? { ...x, kind: 'header', text: x.text.replace(/[:：]$/, '') } : { ...x, kind: 'item' };
     });
@@ -533,7 +533,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v19';
+const APP_VERSION = 'yige-v20';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1896,7 +1896,10 @@ function secTiles(vm){
   const tile = (key, em, name, n, onclick, extra = '') => h('button', { class: 'stile' + (cur === key ? ' on' : '') + extra, onclick, 'aria-pressed': cur === key },
     h('span', { class: 'em', style: em ? {} : { background: colorOf(l), color: '#fff', fontWeight: 700, fontSize: '18px' } }, em || name.slice(0, 1)),
     h('span', { class: 'nm' }, name), n == null ? null : h('span', { class: 'ct' }, n ? `${n} 項` : '沒有'));
-  const pick = key => () => { if (edit) commitEdit({ render: false }); setSecView(l.id, key); render(); scrollTo(0, 0); };
+  const pick = key => () => {
+    if (cur === key && key !== 'all' && key !== 'none'){ const sec = l.sections.find(x => x.id === key); if (sec){ openSectionMenu(l, sec); return; } }
+    if (edit) commitEdit({ render: false }); setSecView(l.id, key); render(); scrollTo(0, 0);
+  };
   box.append(tile('all', '📋', '全部', all.length, pick('all')));
   const none = all.filter(i => !secOf(l, i.sectionId)).length;
   if (none) box.append(tile('none', '📄', '未分類', none, pick('none')));
