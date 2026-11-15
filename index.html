@@ -475,6 +475,7 @@ if (typeof module !== 'undefined') module.exports = Splitter;
   addEventListener('focusin', e => { if (isField(e.target)) document.body.classList.add('typing'); });
   addEventListener('focusout', () => setTimeout(() => { if (!isField(document.activeElement)) document.body.classList.remove('typing'); }, 0));
 })();
+var alignedKey = null;
 /* 鍵盤跳出來時：把底部視窗移到鍵盤上面，不要被擋住 */
 (() => {
   const vv = window.visualViewport; if (!vv) return;
@@ -489,18 +490,25 @@ if (typeof module !== 'undefined') module.exports = Splitter;
     root.style.setProperty('--vvh', (vv.height / z) + 'px');
     const open = hidden > 120 || (screen.height && vv.height < screen.height * 0.62 && matchMedia('(pointer: coarse)').matches);
     document.body && document.body.classList.toggle('kb-open', !!open);
-    if (open) setTimeout(alignAboveKeyboard, 80);
+    if (open && !wasOpen) setTimeout(alignAboveKeyboard, 80);      // 只在鍵盤剛打開時對齊一次
+    if (!open) alignedKey = null;                                   // 鍵盤收起來後，下次打開再對齊
+    wasOpen = !!open;
   }
+  let wasOpen = false;
   vv.addEventListener('resize', upd); vv.addEventListener('scroll', upd);
-  addEventListener('focusin', () => setTimeout(() => { upd(); alignAboveKeyboard(); }, 320));
+  addEventListener('focusin', e => { if (e.target && e.target.matches && e.target.matches('textarea[data-edit]')) setTimeout(() => { upd(); alignAboveKeyboard(); }, 320); });
   upd();
 })();
 /* 鍵盤打開時，把正在打字的那一格放在鍵盤正上方（每次都停在同一個位置） */
+/* 同一格只對齊一次：對齊過後你自己上下滑，就不會再被拉回去 */
 function alignAboveKeyboard(){
   if (!document.body.classList.contains('kb-open')) return;
   const a = document.activeElement;
   if (!a || !a.matches || !a.matches('textarea[data-edit]')) return;
   const row = a.closest('.row'); if (!row) return;
+  const key = row.dataset.id || ('g:' + (row.dataset.ghost || ''));
+  if (alignedKey === key) return;
+  alignedKey = key;
   const vh = window.visualViewport ? visualViewport.height : innerHeight;
   const r = row.getBoundingClientRect();
   const gap = Math.min(130, Math.max(60, vh * 0.2));  // 跟鍵盤之間留一點空間（看得到下一行）
@@ -509,7 +517,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v17';
+const APP_VERSION = 'yige-v18';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1653,7 +1661,8 @@ function render(){
         if (document.body.classList.contains('kb-open')){ setTimeout(alignAboveKeyboard, 0); }
         const r = ta.getBoundingClientRect();
         const vh = window.visualViewport ? visualViewport.height : innerHeight;
-        if (r.top > vh - 40 || r.bottom < 60) ta.scrollIntoView({ block: 'nearest' });
+        if (render.lastEdit !== edit && (r.top > vh - 40 || r.bottom < 60)) ta.scrollIntoView({ block: 'nearest' });
+        render.lastEdit = edit;
       } else {
         // 正在編輯的項目因為改了日期等原因離開這個畫面：先把文字存起來
         const e = edit; edit = null;
@@ -2105,7 +2114,7 @@ function renderRow(it, vm){
 function renderGhost(vm){
   const ctx = edit.ghost.ctx;
   const l = listById(ctx.listId) || firstList();
-  const li = h('li', { class: 'row editing', style: {} });
+  const li = h('li', { class: 'row editing', style: {}, 'data-ghost': edit.ghost.afterId || 'end' });
   li.style.setProperty('--c', colorOf(l));
   const txt = h('div', { class: 'rtext' }, editor('title'), ...notesBlock());
   const fake = { due: ctx.due, repeat: '', listId: l.id, done: false };
