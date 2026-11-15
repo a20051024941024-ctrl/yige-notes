@@ -503,7 +503,8 @@ function alignAboveKeyboard(){
   const row = a.closest('.row'); if (!row) return;
   const vh = window.visualViewport ? visualViewport.height : innerHeight;
   const r = row.getBoundingClientRect();
-  let delta = r.bottom - (vh - 10);                 // 這一格的底部貼齊鍵盤上緣
+  const gap = Math.min(130, Math.max(60, vh * 0.2));  // 跟鍵盤之間留一點空間（看得到下一行）
+  let delta = r.bottom - (vh - gap);
   if (r.height > vh - 90) delta = r.top - 64;      // 太高放不下時，改成頂部對齊
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
