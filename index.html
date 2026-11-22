@@ -283,6 +283,35 @@ input,textarea,select{font:inherit;color:inherit}
 .resume .rn{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .resume .rdone{font-size:14px;color:var(--green);align-self:center}
 
+/* 圖片 */
+.thumbs{display:flex;gap:6px;margin-top:6px}
+.thb{position:relative;width:58px;height:58px;border-radius:9px;overflow:hidden;background:var(--fill);flex:none;padding:0}
+.th{width:100%;height:100%;object-fit:cover;display:block}
+.th.missing{opacity:0}
+.thb .more{position:absolute;inset:0;background:rgba(0,0,0,.45);color:#fff;font-weight:700;display:grid;place-items:center;font-size:15px}
+.dimgs{padding:12px 14px}
+.dhead{font-size:15px;color:var(--label2);margin-bottom:10px}
+.dgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.dcell{aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--fill);padding:0}
+.dcell img{width:100%;height:100%;object-fit:cover;display:block}
+.dcell.add{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--blue);border:1.5px dashed var(--ring);background:transparent}
+.dcell.add span{font-size:22px;line-height:1}
+.dcell.add small{font-size:12px;margin-top:2px}
+.viewer{position:fixed;inset:0;z-index:90;background:#000;color:#fff;display:flex;flex-direction:column;padding:var(--sat) 0 var(--sab)}
+.vtop{display:flex;align-items:center;gap:12px;padding:10px 14px;flex:none}
+.vx{color:#fff;font-size:22px;width:36px;height:36px}
+.vcnt{font-size:14px;opacity:.75;flex:none}
+.vt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;text-align:right}
+.vstage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center}
+.vimg{max-width:100%;max-height:100%;object-fit:contain;-webkit-user-select:auto;user-select:auto;-webkit-touch-callout:default;touch-action:pan-y pinch-zoom}
+.vimg.loading{opacity:.6}
+.vnav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:64px;color:#fff;font-size:38px;background:rgba(255,255,255,.08);border-radius:10px}
+.vnav.l{left:6px}.vnav.r{right:6px}
+.vbar{display:flex;gap:10px;padding:12px 14px 4px;flex:none}
+.vbtn{flex:1;height:46px;border-radius:12px;background:rgba(255,255,255,.14);color:#fff;font-weight:600;font-size:15px}
+.vbtn.red{color:#ff6b62}
+.vhint{text-align:center;font-size:12px;opacity:.5;padding:4px 0 10px;flex:none}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
@@ -533,7 +562,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v20';
+const APP_VERSION = 'yige-v21';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1034,6 +1063,7 @@ const fb = (() => {
       if (route.name === 'list' && !listById(route.id)) route = { name: 'home' };
     }
     sortLists(); lsSet(state); diff(); requestRender(); repaint();
+    setTimeout(uploadPending, 500);
   }
   function sortLists(){ state.lists.sort((a, b) => (a.shared ? 1 : 0) - (b.shared ? 1 : 0) || (a.pos ?? 1e6) - (b.pos ?? 1e6)); }
 
@@ -1186,6 +1216,7 @@ const fb = (() => {
       if (state.showDone[old] !== undefined){ state.showDone[nid] = state.showDone[old]; delete state.showDone[old]; }
       if (route.name === 'list' && route.id === old) route = { name: 'list', id: nid };
       commit();
+      setTimeout(uploadPending, 800);
     }
     return l.id;
   }
@@ -1287,7 +1318,35 @@ const fb = (() => {
     await A.signOut(auth);
     await A.signInAnonymously(auth);
   }
-  return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf,
+  /* ---------- 圖片：壓縮後存在 Firestore（共用列表 → lists/{id}/images，自己的 → users/{uid}/images） ---------- */
+  function imagePath(it, imgId){
+    const l = listById(it.listId); if (!on || !l) return null;
+    if (l.shared) return l.pending ? null : `lists/${l.id}/images/${imgId}`;
+    if (loggedIn() && personalReady) return `users/${me}/images/${imgId}`;
+    return null;
+  }
+  async function putImage(path, data){ await F.setDoc(D(path), { full: data.full, thumb: data.thumb, w: data.w || 0, h: data.h || 0, by: me, at: Date.now() }); }
+  async function getImage(path){ if (!on) return null; try { const sn = await F.getDoc(D(path)); return sn.exists() ? sn.data() : null; } catch (e){ console.warn(e); return null; } }
+  function delImage(path){ if (on && path) F.deleteDoc(D(path)).catch(() => {}); }
+  /* 圖片還沒放到雲端（或換了列表）的，補傳上去 */
+  let uploading = false;
+  async function uploadPending(){
+    if (!on || uploading) return; uploading = true;
+    try {
+      let changed = false;
+      for (const it of state.items){
+        for (const m of (it.images || [])){
+          const want = imagePath(it, m.id);
+          if (!want || m.p === want) continue;
+          const data = await IMG.local(m.id);
+          if (!data) continue;
+          try { await putImage(want, data); m.p = want; changed = true; } catch (e){ onWriteErr(e); }
+        }
+      }
+      if (changed){ save(); }
+    } finally { uploading = false; }
+  }
+  return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf, imagePath, putImage, getImage, delImage, uploadPending,
     loginGoogle, loginEmail, signupEmail, resetPw, logout, errMsg,
     get on(){ return on; }, get failed(){ return failed; }, get me(){ return me; }, get myName(){ return myName; },
     get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; }, get loggedIn(){ return loggedIn(); },
@@ -1609,6 +1668,17 @@ function commitEdit({ next = false, render: doRender = true } = {}){
 }
 /* 在任何一格貼上多行文字 → 拆成好幾個提醒事項 */
 function handlePaste(e, ta){
+  const files = e.clipboardData && e.clipboardData.files ? [...e.clipboardData.files].filter(f => /^image\//.test(f.type)) : [];
+  if (files.length && edit){
+    e.preventDefault();
+    if (edit.id){ const id = edit.id; commitEdit(); IMG.add(id, files); }
+    else {
+      const g = edit; const v = g.value.trim(); edit = null;
+      const [mm] = createItems([{ text: v || ('圖片 ' + fmtStamp(Date.now())), notes: (g.notes || '').trim() }], g.ghost.ctx, g.ghost.afterId);
+      save(); render(); IMG.add(mm.id, files);
+    }
+    return;
+  }
   const t = e.clipboardData && e.clipboardData.getData('text/plain');
   if (!t || !/[\n\r]|[①-⑳]|\d[.、)]\S.*\s\d[.、)]|、.*、/.test(t) && !/[。；;！？]/.test(t)) return;
   const s = ta.selectionStart, en = ta.selectionEnd;
@@ -2041,6 +2111,192 @@ function sharedPrefix(listId){
   prefixCache.set(listId, p);
   return p;
 }
+/* =====================================================================
+   圖片：每個提醒事項都可以放圖片（拍照、相簿、貼上）
+   本機存在 IndexedDB；有登入或共用列表時，也存到雲端
+   ===================================================================== */
+const IMG = (() => {
+  let dbp = null;
+  const mem = new Map();
+  function idb(){
+    if (dbp) return dbp;
+    dbp = new Promise(res => {
+      try {
+        const r = indexedDB.open('yige-img', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('img');
+        r.onsuccess = () => res(r.result); r.onerror = () => res(null);
+      } catch { res(null); }
+    });
+    return dbp;
+  }
+  const tx = async (mode, fn) => { const d = await idb(); if (!d) return null; return new Promise(res => { try { const q = fn(d.transaction('img', mode).objectStore('img')); q.onsuccess = () => res(q.result ?? null); q.onerror = () => res(null); } catch { res(null); } }); };
+  const local = async id => mem.get(id) || await tx('readonly', st => st.get(id));
+  const putLocal = (id, v) => { mem.set(id, v); return tx('readwrite', st => st.put(v, id)); };
+  const delLocal = id => { mem.delete(id); return tx('readwrite', st => st.delete(id)); };
+  function loadImage(file){
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file); const im = new Image();
+      im.onload = () => { res(im); setTimeout(() => URL.revokeObjectURL(url), 2000); };
+      im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('bad image')); };
+      im.src = url;
+    });
+  }
+  function draw(im, max, q){
+    let w = im.naturalWidth || im.width, hh = im.naturalHeight || im.height;
+    const k = Math.min(1, max / Math.max(w, hh)); w = Math.max(1, Math.round(w * k)); hh = Math.max(1, Math.round(hh * k));
+    const c = document.createElement('canvas'); c.width = w; c.height = hh;
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, hh); x.drawImage(im, 0, 0, w, hh);
+    return { url: c.toDataURL('image/jpeg', q), w, h: hh };
+  }
+  /* 壓縮：大圖最長邊 1600、品質 0.82；太大就再縮，確保放得進雲端（每張 < 0.85MB） */
+  async function prepare(file){
+    const im = await loadImage(file);
+    let max = 1600, q = 0.82, full = draw(im, max, q), n = 0;
+    while (full.url.length > 850000 && n++ < 6){ max = Math.round(max * 0.8); q = Math.max(0.6, q - 0.05); full = draw(im, max, q); }
+    const thumb = draw(im, 360, 0.72);
+    return { full: full.url, thumb: thumb.url, w: full.w, h: full.h };
+  }
+  async function get(meta, kind){
+    let v = await local(meta.id);
+    if (!v && meta.p && !IN_CLAUDE){ v = await fb.getImage(meta.p); if (v) putLocal(meta.id, { full: v.full, thumb: v.thumb, w: v.w, h: v.h }); }
+    if (v){ mem.set(meta.id, v); return v[kind] || v.full; }
+    return null;
+  }
+  async function add(itemId, files){
+    const list = [...files].filter(f => f && /^image\//.test(f.type || 'image/'));
+    if (!list.length) return;
+    showToast(list.length > 1 ? `處理 ${list.length} 張圖片中…` : '處理圖片中…');
+    let ok = 0;
+    for (const f of list){
+      try {
+        const d = await prepare(f);
+        const it = itemById(itemId); if (!it) break;
+        const id = uid();
+        await putLocal(id, d);
+        const path = !IN_CLAUDE ? fb.imagePath(it, id) : null;
+        const meta = { id, w: d.w, h: d.h, t: Date.now(), p: '' };
+        it.images = [...(it.images || []), meta];
+        save(); render();
+        ok++;
+        if (path){ fb.putImage(path, d).then(() => { meta.p = path; const cur = itemById(itemId); const m = cur && (cur.images || []).find(x => x.id === id); if (m){ m.p = path; save(); } }).catch(e => { console.warn(e); showToast('圖片暫時沒傳到雲端，下次會再試'); }); }
+      } catch (e){ console.warn(e); showToast('有一張圖片讀不出來，請換一張'); }
+    }
+    if (ok) showToast(ok > 1 ? `已加入 ${ok} 張圖片` : '已加入圖片');
+  }
+  /* 刪掉：先從提醒事項拿掉（可復原），10 秒後沒有人再用到才真的刪 */
+  function remove(itemId, imgId){
+    const it = itemById(itemId); if (!it) return;
+    const meta = (it.images || []).find(m => m.id === imgId);
+    snapshot();
+    it.images = (it.images || []).filter(m => m.id !== imgId);
+    commit();
+    showToast('已刪除圖片', [{ label: '復原', fn: undo }]);
+    setTimeout(() => {
+      if (state.items.some(x => (x.images || []).some(m => m.id === imgId))) return;
+      delLocal(imgId); if (meta && meta.p && !IN_CLAUDE) fb.delImage(meta.p);
+    }, 10000);
+  }
+  return { add, get, remove, local };
+})();
+/* 選圖片（拍照或相簿），選好後交給 onFiles */
+function pickImages(onFiles){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true; inp.style.display = 'none';
+  inp.onchange = () => { const fs = [...(inp.files || [])]; inp.remove(); if (fs.length) onFiles(fs); };
+  document.body.append(inp); inp.click();
+  setTimeout(() => { if (document.body.contains(inp) && !inp.files.length) {} }, 0);
+}
+/* 一列底下的縮圖 */
+function thumbStrip(it){
+  const imgs = it.images || []; if (!imgs.length) return null;
+  const box = h('div', { class: 'thumbs' });
+  imgs.slice(0, 4).forEach((m, i) => {
+    const im = h('img', { class: 'th', alt: '', draggable: 'false' });
+    IMG.get(m, 'thumb').then(u => { if (u) im.src = u; else im.classList.add('missing'); });
+    const cell = h('button', { class: 'thb', 'aria-label': `圖片 ${i + 1}` }, im, i === 3 && imgs.length > 4 ? h('span', { class: 'more' }, '+' + (imgs.length - 4)) : null);
+    cell.addEventListener('pointerdown', e => e.stopPropagation());
+    cell.addEventListener('click', e => { e.stopPropagation(); if (edit) commitEdit({ render: false }); openViewer(it.id, i); });
+    box.append(cell);
+  });
+  return box;
+}
+/* 全螢幕看圖：左右滑換張、複製、存到手機、刪除 */
+function openViewer(itemId, idx){
+  const it = itemById(itemId); if (!it || !(it.images || []).length) return;
+  let i = Math.max(0, Math.min(idx, it.images.length - 1));
+  const ov = h('div', { class: 'viewer', role: 'dialog', 'aria-label': '看圖片' });
+  const img = h('img', { class: 'vimg', alt: '' });
+  const cnt = h('span', { class: 'vcnt' });
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey); render(); };
+  const show = () => {
+    const cur = itemById(itemId); if (!cur || !(cur.images || []).length){ close(); return; }
+    i = Math.max(0, Math.min(i, cur.images.length - 1));
+    const m = cur.images[i];
+    cnt.textContent = `${i + 1} / ${cur.images.length}`;
+    img.removeAttribute('src'); img.classList.add('loading');
+    IMG.get(m, 'thumb').then(u => { if (u && !img.src) img.src = u; });
+    IMG.get(m, 'full').then(u => { if (u){ img.src = u; img.classList.remove('loading'); } else { img.classList.remove('loading'); showToast('這張圖片還沒下載到這支手機'); } });
+    prev.hidden = i === 0; next.hidden = i >= cur.images.length - 1;
+  };
+  const prev = h('button', { class: 'vnav l', 'aria-label': '上一張', onclick: () => { i--; show(); } }, '‹');
+  const next = h('button', { class: 'vnav r', 'aria-label': '下一張', onclick: () => { i++; show(); } }, '›');
+  const curMeta = () => (itemById(itemId).images || [])[i];
+  const btn = (label, fn, cls = '') => h('button', { class: 'vbtn ' + cls, onclick: fn }, label);
+  ov.append(
+    h('div', { class: 'vtop' }, h('button', { class: 'vx', 'aria-label': '關閉', onclick: close }, '✕'), cnt, h('span', { class: 'vt' }, it.title)),
+    h('div', { class: 'vstage' }, img, prev, next),
+    h('div', { class: 'vbar' },
+      btn('複製圖片', () => copyImage(curMeta())),
+      btn('存到手機', () => saveImage(curMeta(), it.title, i + 1)),
+      btn('刪除', () => { const m = curMeta(); if (!m) return; IMG.remove(itemId, m.id); show(); }, 'red')),
+    h('div', { class: 'vhint' }, '也可以長按圖片 → 儲存圖片'));
+  // 左右滑
+  let sx = null;
+  img.addEventListener('pointerdown', e => { sx = e.clientX; });
+  img.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; const n = (itemById(itemId).images || []).length; if (dx < -50 && i < n - 1){ i++; show(); } else if (dx > 50 && i > 0){ i--; show(); } });
+  const onKey = e => { if (e.key === 'Escape') close(); else if (e.key === 'ArrowLeft' && i > 0){ i--; show(); } else if (e.key === 'ArrowRight'){ i++; show(); } };
+  document.addEventListener('keydown', onKey);
+  document.body.append(ov);
+  show();
+}
+function toPngBlob(dataUrl){
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => { const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight; c.getContext('2d').drawImage(im, 0, 0); c.toBlob(b => b ? res(b) : rej(new Error('png')), 'image/png'); };
+    im.onerror = rej; im.src = dataUrl;
+  });
+}
+/* 複製圖片到剪貼簿（可以直接貼到聊天或繪圖軟體） */
+function copyImage(meta){
+  if (!meta) return;
+  try {
+    if (!navigator.clipboard || !window.ClipboardItem) throw new Error('no');
+    const blobP = IMG.get(meta, 'full').then(u => { if (!u) throw new Error('missing'); return toPngBlob(u); });
+    navigator.clipboard.write([new ClipboardItem({ 'image/png': blobP })])
+      .then(() => showToast('已複製圖片，可以直接貼上'))
+      .catch(() => showToast('這裡不能直接複製圖片：請長按圖片 → 拷貝'));
+  } catch { showToast('這裡不能直接複製圖片：請長按圖片 → 拷貝'); }
+}
+/* 存到手機 */
+function saveImage(meta, title, n){
+  if (!meta) return;
+  if (IN_CLAUDE){ showToast('請長按圖片 → 儲存圖片'); return; }
+  IMG.get(meta, 'full').then(async u => {
+    if (!u){ showToast('這張圖片還沒下載到這支手機'); return; }
+    try {
+      const blob = await (await fetch(u)).blob();
+      const name = `一格記事-${(title || '圖片').replace(/[\\/:*?"<>|\s]+/g, '').slice(0, 20)}-${n}.jpg`;
+      const file = new File([blob], name, { type: 'image/jpeg' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && /iPhone|iPad|iPod/.test(navigator.userAgent)){
+        await navigator.share({ files: [file] }).catch(() => {});   // iPhone：分享 → 儲存影像
+        return;
+      }
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      showToast('已存到手機（下載資料夾）');
+    } catch { showToast('請長按圖片 → 儲存圖片'); }
+  });
+}
 function notesPreview(it){
   let n = (it.notes || '').trim().replace(/\s*\n\s*/g, ' ');
   const p = sharedPrefix(it.listId);
@@ -2144,8 +2400,9 @@ function renderRow(it, vm){
   const txt = h('div', { class: 'rtext' });
   if (isEditing){
     txt.append(editor('title'), ...notesBlock());
+    const ts = thumbStrip(it); if (ts) txt.append(ts);
     const m = rowMeta(it, vm, true); if (m) txt.append(m);
-    txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
+    txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it, onImages: () => { const id = it.id; commitEdit(); pickImages(fs => IMG.add(id, fs)); } }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
   } else {
     const t = h('div', { class: 'title' });
     if (num) t.append(h('span', { class: 'nb' }, String(num)));
@@ -2153,6 +2410,7 @@ function renderRow(it, vm){
     t.append(withHighlights(it.title));
     txt.append(t);
     if (it.notes && it.notes.trim()) txt.append(notesPreview(it));
+    const ts = thumbStrip(it); if (ts) txt.append(ts);
     const m = rowMeta(it, vm); if (m) txt.append(m);
   }
   const body = h('div', { class: 'rbody' }, txt,
@@ -2182,7 +2440,18 @@ function renderGhost(vm){
   const txt = h('div', { class: 'rtext' }, editor('title'), ...notesBlock());
   const fake = { due: ctx.due, repeat: '', listId: l.id, done: false };
   const m = rowMeta(fake, vm); if (m) txt.append(m);
-  txt.append(chipsFor({ due: ctx.due, flagged: ctx.flagged }, patch => { Object.assign(ctx, patch); render(); }, () => {
+  txt.append(chipsFor({ due: ctx.due, flagged: ctx.flagged, onImages: () => {
+    const g = edit; const v = g.value.trim(); const notes = (g.notes || '').trim();
+    const gc = clone(g.ghost);
+    edit = null;
+    let made = null;
+    if (v){ [made] = createItems([{ text: v, notes }], gc.ctx, gc.afterId); save(); render(); }
+    pickImages(fs => {
+      let id = made && made.id;
+      if (!id){ const [mm] = createItems([{ text: '圖片 ' + fmtStamp(Date.now()), notes }], gc.ctx, gc.afterId); save(); render(); id = mm.id; }
+      IMG.add(id, fs);
+    });
+  } }, patch => { Object.assign(ctx, patch); render(); }, () => {
     const g = edit; const v = g.value.trim();
     if (v){ edit = null; const [mm] = createItems([{ text: v, notes: (g.notes || '').trim() }], g.ghost.ctx, g.ghost.afterId); save(); render(); openDetail(mm.id); }
     else { edit = null; render(); openNew({ ...g.ghost.ctx }); }
@@ -2229,7 +2498,7 @@ function editor(field){
     if (!isNotes && /\n/.test(ta.value)){ const parts = Splitter.items(ta.value); if (parts.length >= 2){ const v = ta.value; const fakeEvt = { clipboardData: { getData: () => v }, preventDefault(){} }; ta.value = ''; edit.value = ''; handlePaste(fakeEvt, ta); } }
   });
   ta.addEventListener('select', () => { if (edit) edit.caret = ta.selectionStart; });
-  if (!isNotes) ta.addEventListener('paste', e => handlePaste(e, ta));
+  ta.addEventListener('paste', e => { if (isNotes){ const f = e.clipboardData && e.clipboardData.files; if (f && [...f].some(x => /^image\//.test(x.type))) handlePaste(e, ta); } else handlePaste(e, ta); });
   ta.addEventListener('keydown', e => {
     if (e.isComposing || e.keyCode === 229) return;   // 中文輸入法選字中
     if (e.key === 'Escape'){ e.preventDefault(); ta.blur(); return; }
@@ -2260,6 +2529,7 @@ function chipsFor(cur, onPatch, onMore){
     mk('今天', t), mk('明天', tm),
     h('button', { class: 'chip' + (d && d !== t && d !== tm ? ' on' : ''), html: UI.cal + '<span>' + (d && d !== t && d !== tm ? fmtDay(d) : '日期') + '</span>', onpointerdown: keep, onclick: onMore }),
     h('button', { class: 'chip' + (cur.flagged ? ' flagon' : ''), html: UI.flag + '<span>重點</span>', 'aria-label': cur.flagged ? '取消重點' : '設為重點', onpointerdown: keep, onclick: () => onPatch({ flagged: !cur.flagged }) }));
+  if (cur.onImages) box.append(h('button', { class: 'chip', html: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="m21 16-4.5-4.5L8 20"/></svg><span>圖片</span>', onpointerdown: keep, onclick: () => cur.onImages() }));
   if (cur.item && !cur.item.done) box.append(h('button', { class: 'chip' + (cur.item.doing ? ' doingon' : ''), onpointerdown: keep, onclick: () => onPatch({ doing: !cur.item.doing, doingBy: !cur.item.doing ? (SYNC.me || '') : '' }) }, '▶ 進行中'));
   return box;
 }
@@ -2578,6 +2848,20 @@ function openDetail(id){
   const sharedHere = IN_CLAUDE ? !!cloud.me : !!(lst && lst.shared);
   const who = id => !sharedHere || !id ? '' : '（' + (id === SYNC.me ? '我' : (SYNC.nameOf(id, it.listId) || '某人')) + '）';
   const line = (label, val, color) => h('div', { class: 'f' }, h('span', { class: 'fin' }, h('span', { class: 'fl' }, label), h('span', { style: { color: color || 'var(--label2)', fontSize: '15px', textAlign: 'right' } }, val)));
+  const imgBox = h('div', { class: 'fgroup dimgs' });
+  const fillImgs = () => {
+    imgBox.textContent = '';
+    const cur = itemById(id); const imgs = (cur && cur.images) || [];
+    const grid = h('div', { class: 'dgrid' });
+    imgs.forEach((m, i) => {
+      const im = h('img', { alt: '' }); IMG.get(m, 'thumb').then(u => { if (u) im.src = u; });
+      grid.append(h('button', { class: 'dcell', onclick: () => { closeSheet(); setTimeout(() => openViewer(id, i), 330); } }, im));
+    });
+    grid.append(h('button', { class: 'dcell add', onclick: () => pickImages(fs => IMG.add(id, fs).then(() => setTimeout(fillImgs, 100))) }, h('span', {}, '＋'), h('small', {}, '加圖片')));
+    imgBox.append(h('div', { class: 'dhead' }, `圖片${imgs.length ? `（${imgs.length}）` : ''}`), grid);
+  };
+  fillImgs();
+  f.el.append(imgBox);
   f.el.append(h('div', { class: 'fgroup' },
     line('提出時間', it.createdAt ? fmtStamp(it.createdAt, true) + who(it.createdBy) : '不知道'),
     line('完成時間', it.done && it.doneAt ? fmtStamp(it.doneAt, true) + who(it.doneBy) : '還沒完成', it.done ? 'var(--green)' : '')));
@@ -2940,6 +3224,8 @@ function openCopy(id, withMore){
     notes ? I(UI.copy, '複製內容', () => copyItem(it, 'notes')) : null,
     I(UI.copy, '複製標題', () => copyItem(it, 'title')),
     notes ? I(UI.copy, '複製標題和內容', () => copyItem(it, 'both')) : null,
+    (it.images || []).length ? I('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10.5" r="1.8"/><path d="m21 16-4.5-4.5L8 20"/></svg>', it.images.length > 1 ? '複製第一張圖片' : '複製圖片', () => copyImage(it.images[0])) : null,
+    (it.images || []).length ? I(UI.eye, `看圖片（${it.images.length} 張）`, later(() => openViewer(id, 0))) : null,
     I(UI.dup, '建立副本（再複製一個提醒事項）', () => duplicate(id)),
   ].filter(Boolean);
   const more = withMore ? h('div', { class: 'fgroup' }, h('ul', { class: 'menu' },
