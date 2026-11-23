@@ -312,6 +312,36 @@ input,textarea,select{font:inherit;color:inherit}
 .vbtn.red{color:#ff6b62}
 .vhint{text-align:center;font-size:12px;opacity:.5;padding:4px 0 10px;flex:none}
 
+/* 現在要做／記新的事 */
+.nowcard{background:var(--card);border-radius:16px;padding:14px 14px 12px;margin:2px 0 12px;border:2px solid var(--blue)}
+.nowlab{font-size:14px;font-weight:700;color:var(--blue);display:flex;align-items:center;gap:8px}
+.nowwhy{font-size:12px;font-weight:600;background:var(--fill);border-radius:8px;padding:1px 8px}
+.nowmain{display:block;width:100%;text-align:left;padding:6px 0 10px}
+.nowtitle{font-size:22px;font-weight:700;line-height:1.25;word-break:break-word}
+.nownotes{color:var(--label2);font-size:14px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nowsub{color:var(--label2);font-size:13px;margin-top:3px}
+.nowdone{font-size:20px;font-weight:700;margin-top:8px}
+.nowbtns{display:flex;gap:8px}
+.nowbtns .wbtn{height:46px}
+.nownext{margin-top:12px;border-top:.5px solid var(--sep);padding-top:8px}
+.nxlab{font-size:12px;color:var(--label2);margin-bottom:2px}
+.nxrow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 0;min-width:0}
+.nxn{width:20px;height:20px;border-radius:50%;background:var(--fill);font-size:12px;font-weight:700;display:grid;place-items:center;flex:none;color:var(--label2)}
+.nxt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nxw{font-size:12px;flex:none}
+.nowtag{font-size:12px;font-weight:700;color:var(--blue)}
+.quick{background:var(--card);border-radius:16px;padding:12px 14px;margin:0 0 16px}
+.qlab{font-size:14px;font-weight:700;margin-bottom:8px}
+.qrow{display:flex;align-items:flex-end;gap:8px}
+.qin{flex:1;min-width:0;border:0;background:var(--fill);border-radius:12px;padding:11px 12px;font-size:17px;line-height:1.3;resize:none;outline:none;max-height:120px}
+.qin:focus{box-shadow:0 0 0 2px var(--blue)}
+.qin::placeholder{color:var(--label2)}
+.qbtn{width:44px;height:44px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;flex:none}
+.qbtn svg{width:18px;height:18px}
+.qbtn:disabled{opacity:.35}
+.qto{display:flex;align-items:center;gap:4px;margin-top:8px;font-size:13px;color:var(--label2)}
+.qsel{border:0;background:transparent;color:var(--blue);font-size:14px;font-weight:600;outline:none;max-width:70%}
+
 /* ===== 底部面板 ===== */
 .backdrop{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:50;opacity:0;pointer-events:none;transition:opacity .25s}
 .backdrop.show{opacity:1;pointer-events:auto}
@@ -562,7 +592,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v21';
+const APP_VERSION = 'yige-v22';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1736,7 +1766,7 @@ function h(tag, props = {}, ...kids){
 
 function render(){
   rendering = true;
-  prefixCache.clear(); lastCopyCache.clear();
+  prefixCache.clear(); lastCopyCache.clear(); nowCache.clear();
   try {
     const app = $('#app');
     app.textContent = '';
@@ -1782,6 +1812,78 @@ function renderHome(){
 }
 const tipsSeen = () => { try { return localStorage.getItem('yige-tips') === '1'; } catch { return false; } };
 const tipsDone = () => { try { localStorage.setItem('yige-tips', '1'); } catch {} };
+/* ---------- 現在要做什麼：自動挑出最該先做的一件 ---------- */
+function nowReason(it){
+  const t = today();
+  if (it.doing) return [0, '進行中', 'var(--blue)'];
+  if (isOverdue(it)) return [1, '已經過期', 'var(--red)'];
+  if (it.due && it.due.date === t) return [2, '今天要做' + (it.due.time ? ' ' + fmtTime(it.due.time) : ''), 'var(--orange)'];
+  if (it.flagged) return [3, '重點', 'var(--orange)'];
+  if (it.due && it.due.date === addDays(t, 1)) return [4, '明天到期', 'var(--label2)'];
+  return [5, '排在最前面', 'var(--label2)'];
+}
+function nowQueue(listId){
+  const me = SYNC.me;
+  return state.items
+    .filter(i => !i.done && listById(i.listId) && (!listId || i.listId === listId) && !(i.assignee && me && i.assignee !== me))
+    .map(i => ({ it: i, r: nowReason(i) }))
+    .sort((a, b) => a.r[0] - b.r[0] || ((a.it.due ? a.it.due.date + (a.it.due.time || '') : '9').localeCompare(b.it.due ? b.it.due.date + (b.it.due.time || '') : '9')) || byListOrder(a.it, b.it));
+}
+function nowCard(){
+  const q = nowQueue();
+  const box = h('div', { class: 'nowcard' });
+  if (!q.length){
+    box.append(h('div', { class: 'nowlab' }, '👉 現在要做'), h('div', { class: 'nowdone' }, '🎉 全部做完了！'), h('div', { class: 'nowsub' }, '有新的事就記在下面'));
+    return box;
+  }
+  const { it, r } = q[0];
+  const l = listById(it.listId);
+  const openIt = x => { go({ name: 'list', id: x.listId }); flashIds([x.id]); requestAnimationFrame(() => { const el = document.querySelector(`.row[data-id="${x.id}"]`); if (el) el.scrollIntoView({ block: 'center' }); }); };
+  const notes = (it.notes || '').trim().replace(/\s*\n\s*/g, ' ');
+  box.append(
+    h('div', { class: 'nowlab' }, '👉 現在要做', h('span', { class: 'nowwhy', style: { color: r[2] } }, r[1])),
+    h('button', { class: 'nowmain', onclick: () => openIt(it) },
+      h('div', { class: 'nowtitle' }, it.title),
+      notes ? h('div', { class: 'nownotes' }, notes) : null,
+      h('div', { class: 'nowsub' }, l.name + (secName(it) ? ' › ' + secName(it) : ''))),
+    h('div', { class: 'nowbtns' },
+      h('button', { class: 'wbtn primary', onclick: () => { toggleDone(it.id); showToast(`做完「${trunc(it.title, 10)}」了 👍`, [{ label: '還沒做完', fn: () => { const x = itemById(it.id); if (x && x.done) toggleDone(it.id); } }]); } }, '✓ 做完了'),
+      notes ? h('button', { class: 'wbtn', style: { marginTop: 0, flex: '0 0 38%' }, onclick: () => copyItem(it, 'notes') }, '複製內容') : null));
+  if (q.length > 1){
+    const nx = h('div', { class: 'nownext' }, h('div', { class: 'nxlab' }, `接下來（還有 ${q.length - 1} 件）`));
+    q.slice(1, 3).forEach(({ it: x, r: rr }, k) => nx.append(h('button', { class: 'nxrow', onclick: () => openIt(x) },
+      h('span', { class: 'nxn' }, String(k + 2)), h('span', { class: 'nxt' }, x.title), rr[0] < 5 ? h('span', { class: 'nxw', style: { color: rr[2] } }, rr[1]) : null)));
+    box.append(nx);
+  }
+  return box;
+}
+/* ---------- 記一件新的事：直接打字，按 Enter 就記好 ---------- */
+function quickList(){ let id = ''; try { id = localStorage.getItem('yige-lastlist') || ''; } catch {} return listById(id) || firstList(); }
+function quickAdd(){
+  const ta = h('textarea', { class: 'qin', id: 'quickin', rows: 1, placeholder: '記一件新的事…（打完按 Enter）', 'aria-label': '記一件新的事', enterkeyhint: 'done' });
+  const sel = h('select', { class: 'qsel', 'aria-label': '記到哪個列表' }, ...state.lists.map(l => h('option', { value: l.id }, l.name)));
+  sel.value = quickList().id;
+  sel.onchange = () => { try { localStorage.setItem('yige-lastlist', sel.value); } catch {} };
+  const addBtn = h('button', { class: 'qbtn', 'aria-label': '記下來', disabled: true, html: UI.plus });
+  const submit = text => {
+    const res = Splitter.split(text); const l = listById(sel.value) || firstList();
+    const multi = res.filter(x => x.kind === 'item').length > 1;
+    snapshot();
+    const made = multi ? createFromSplit(res, { listId: l.id }, null, true).made : createItems([{ text: text.replace(/\s*\n\s*/g, ' ').trim() }], { listId: l.id }, null);
+    if (!made.length) return;
+    commit();
+    showToast(made.length > 1 ? `已記下 ${made.length} 件到「${trunc(l.name, 8)}」` : `已記到「${trunc(l.name, 8)}」`, [{ label: '復原', fn: undo }]);
+    const n = document.getElementById('quickin'); if (n) n.focus({ preventScroll: true });
+  };
+  ta.addEventListener('input', () => { autoGrow(ta); addBtn.disabled = !ta.value.trim(); if (/\n/.test(ta.value) && Splitter.items(ta.value).length > 1){ const v = ta.value; ta.value = ''; submit(v); } });
+  ta.addEventListener('keydown', e => { if (e.isComposing || e.keyCode === 229) return; if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); if (ta.value.trim()) submit(ta.value); } });
+  addBtn.addEventListener('pointerdown', e => e.preventDefault());
+  addBtn.onclick = () => { if (ta.value.trim()) submit(ta.value); };
+  return h('div', { class: 'quick' },
+    h('div', { class: 'qlab' }, '✏️ 記新的事'),
+    h('div', { class: 'qrow' }, ta, addBtn),
+    state.lists.length > 1 ? h('label', { class: 'qto' }, '記到：', sel) : null);
+}
 function welcomeCard(){
   return h('div', { class: 'welcome' },
     h('div', { class: 'wt' }, '👋 歡迎使用一格記事'),
@@ -1823,6 +1925,7 @@ function fillHome(main){
   const t = h('div', { class: 'tiles' });
   const newbie = !state.items.length;
   if (newbie) v.append(welcomeCard());
+  else { v.append(nowCard(), quickAdd()); }
   for (const k of Object.keys(SMART)){
     if (newbie) break;                                     // 新手先不顯示這些方塊
     if (k === 'mine' && !(hasShared() && SYNC.me)) continue;
@@ -2083,6 +2186,8 @@ function withHighlights(text){
   return frag;
 }
 /* 同一個列表裡，備忘錄開頭都一樣的那段先省略，只顯示不一樣的重點 */
+const nowCache = new Map();
+function nowFirst(listId){ if (!nowCache.has(listId)){ const q = nowQueue(listId); nowCache.set(listId, q.length > 1 ? q[0].it.id : null); } return nowCache.get(listId); }
 const prefixCache = new Map();
 const lastCopyCache = new Map();
 function lastCopiedId(listId){
@@ -2361,6 +2466,7 @@ function renderRow(it, vm){
   li.style.setProperty('--c', c);
 
   const num = vm.numbers && vm.numbers.get(it.id);
+  const isNow = route.name === 'list' && !it.done && nowFirst(it.listId) === it.id;
   if (orderMode){
     const t = h('div', { class: 'title' });
     if (num) t.append(h('span', { class: 'nb' }, String(num)));
@@ -2405,6 +2511,7 @@ function renderRow(it, vm){
     txt.append(chipsFor({ due: it.due, flagged: it.flagged, item: it, onImages: () => { const id = it.id; commitEdit(); pickImages(fs => IMG.add(id, fs)); } }, patch => { Object.assign(it, patch); it.notified = ''; save(); render(); }, () => { const id = it.id; commitEdit(); openDetail(id); }));
   } else {
     const t = h('div', { class: 'title' });
+    if (isNow) txt.append(h('div', { class: 'nowtag' }, '👉 先做這個'));
     if (num) t.append(h('span', { class: 'nb' }, String(num)));
     if (it.priority) t.append(h('span', { class: 'prio' }, '!'.repeat(it.priority)));
     t.append(withHighlights(it.title));
@@ -2570,6 +2677,7 @@ function renderToolbar(){
 
 /* ---------- 換頁 ---------- */
 function go(r){
+  if (r && r.name === 'list'){ try { localStorage.setItem('yige-lastlist', r.id); } catch {} }
   if (edit) commitEdit({ render: false });
   if (route.name === 'home') render.homeY = scrollY;
   route = r; selectMode = null; orderMode = false; closeSwipes(); render(); scrollTo(0, 0);
