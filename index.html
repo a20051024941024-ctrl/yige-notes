@@ -706,7 +706,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v24';
+const APP_VERSION = 'yige-v25';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1084,7 +1084,7 @@ function paintStatus(el){
         h('span', { class: 'acct' }, fb.photo ? h('img', { src: fb.photo, alt: '', referrerpolicy: 'no-referrer' }) : h('i', {}, (fb.myName || fb.email || '我').slice(0, 1)), fb.myName || '帳號'));
       return;
     }
-    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : (fb.configured ? '沒登入：資料只存在這支手機' : '');
+    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · ` + (fb.lastSync ? `${fmtStamp(fb.lastSync).replace('今天 ', '')} 更新` : '已連線') : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : (fb.configured ? '沒登入：資料只存在這支手機' : '');
     el.append(...[nShared ? h('span', { class: 'sdot ' + (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') }) : null, h('span', { class: 'stxt' }, txt),
       fb.configured ? h('span', { class: 'loginbtn' }, '登入') : h('span', { class: 'shelp' }, '備份')].filter(Boolean));
     return;
@@ -1103,6 +1103,8 @@ const fb = (() => {
   let psubs = [];                  // 個人空間的監聽
   let personalReady = false, personalSeen = { lists: false, items: false };
   const joinedWritten = new Set();
+  const held = new Map();          // 我正在編輯時，別人改了同一件：先記著，編輯完再套用
+  let lastSync = 0;
   const synced = new Map();        // 'l:'+id / 'i:'+id → { path, j }
   let myName = (() => { try { return localStorage.getItem('yige-name') || ''; } catch { return ''; } })();
   const loggedIn = () => !!(user && !user.isAnonymous);
@@ -1239,7 +1241,7 @@ const fb = (() => {
         delete l.pending;
       }
       if (me && myName && l.members[me] !== myName) F.setDoc(listRef(lid), { members: { [me]: myName } }, { merge: true }).catch(onWriteErr);
-      markJoined(lid);
+      markJoined(lid); lastSync = Date.now();
       lsSet(state); requestRender(); repaint();
     }, e => { console.warn(e); if (s.joining){ drop(lid); if (!s.quiet) showToast('打不開這個邀請，請確認網路或連結'); } });
     s.un2 = F.onSnapshot(F.collection(db, 'lists', lid, 'items'), snap => {
@@ -1256,7 +1258,8 @@ const fb = (() => {
         const d = c.doc.data(); if (!d) return;
         const j = stripI({ ...d, listId: lid });
         const sv = synced.get(k); if (sv && sv.path === path && sv.j === j) return;
-        if (edit && edit.id === id) return;
+        lastSync = Date.now();
+        if (edit && edit.id === id){ held.set(id, { lid, d, path, j }); return; }
         synced.set(k, { path, j });
         const it = clone(d); it.id = id; it.listId = lid;
         const old = itemById(id);
@@ -1345,7 +1348,31 @@ const fb = (() => {
     }
   }
   function requestRender(){ if (edit || dragging || swiping || sheetOpen()) deferred = true; else render(); }
-  function flush(){ if (deferred && !edit && !dragging && !swiping && !sheetOpen()){ deferred = false; render(); } }
+  function applyHeld(id){
+    const x = held.get(id); if (!x) return false;
+    held.delete(id);
+    const it = clone(x.d); it.id = id; it.listId = x.lid;
+    const old = itemById(id); synced.set('i:' + id, { path: x.path, j: x.j });
+    if (old){ const n = old.notified; Object.keys(old).forEach(k => delete old[k]); Object.assign(old, it); old.notified = n; } else state.items.push(it);
+    return true;
+  }
+  function flush(){
+    if (held.size && !edit){ [...held.keys()].forEach(applyHeld); lsSet(state); deferred = true; }
+    if (deferred && !edit && !dragging && !swiping && !sheetOpen()){ deferred = false; render(); }
+  }
+  /* 手機從背景回來、或網路恢復時，強制重新連線，馬上拿到別人的最新改動 */
+  let hiddenAt = 0, kicking = false;
+  async function kick(){
+    if (!on || kicking) return; kicking = true;
+    try { await F.disableNetwork(db); await F.enableNetwork(db); } catch (e){ console.warn(e); }
+    kicking = false; repaint();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden){ hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > 5000) kick();
+  });
+  addEventListener('online', () => kick());
+  addEventListener('pageshow', e => { if (e.persisted) kick(); });
 
   /* ---------- 邀請、加入、離開 ---------- */
   function strongId(){ const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('').slice(0, 20); }
@@ -1496,7 +1523,7 @@ const fb = (() => {
     get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; }, get loggedIn(){ return loggedIn(); },
     get email(){ return user && user.email || ''; }, get photo(){ return user && user.photoURL || ''; },
     get provider(){ return user && user.providerData && user.providerData[0] ? user.providerData[0].providerId : ''; },
-    get synced(){ return personalReady; } };
+    get synced(){ return personalReady; }, get lastSync(){ return lastSync; }, kick, applyHeld };
 })();
 const SYNC = {
   get me(){ return IN_CLAUDE ? cloud.me : fb.me; },
@@ -1799,6 +1826,7 @@ function startGhost(afterId, ctx){
 function commitEdit({ next = false, render: doRender = true } = {}){
   const e = edit; if (!e) return;
   edit = null;
+  if (e.id && !IN_CLAUDE) fb.applyHeld(e.id);   // 別人剛改了這一件：先套用他的，再套用我改的
   const v = e.value.replace(/\s*\n\s*/g, ' ').trim();
   const nv = (e.notes || '').replace(/\s+$/, '');
   let changed = false;
