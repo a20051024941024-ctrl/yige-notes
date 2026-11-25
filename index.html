@@ -706,7 +706,7 @@ function alignAboveKeyboard(){
   if (Math.abs(delta) > 2) scrollBy(0, delta);
 }
 const IN_CLAUDE = !!(window.claude && typeof window.claude.use === 'function');
-const APP_VERSION = 'yige-v23';
+const APP_VERSION = 'yige-v24';
 /* ↓↓↓ 共用功能的 Firebase 設定碼（GitHub 版用）。沒填就只存在這支手機。 ↓↓↓ */
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCiupg708XJ5icin-C-hO8iCJ_oAYMfNpI",
@@ -1084,7 +1084,7 @@ function paintStatus(el){
         h('span', { class: 'acct' }, fb.photo ? h('img', { src: fb.photo, alt: '', referrerpolicy: 'no-referrer' }) : h('i', {}, (fb.myName || fb.email || '我').slice(0, 1)), fb.myName || '帳號'));
       return;
     }
-    const txt = nShared ? (fb.on ? '共用列表要登入才能同步' : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : (fb.configured ? '沒登入：資料只存在這支手機' : '');
+    const txt = nShared ? (fb.on ? `${nShared} 個共用列表 · 已連線` : fb.failed ? '共用列表暫時離線' : '共用列表連線中…') : (fb.configured ? '沒登入：資料只存在這支手機' : '');
     el.append(...[nShared ? h('span', { class: 'sdot ' + (fb.on ? 'synced' : fb.failed ? 'offline' : 'syncing') }) : null, h('span', { class: 'stxt' }, txt),
       fb.configured ? h('span', { class: 'loginbtn' }, '登入') : h('span', { class: 'shelp' }, '備份')].filter(Boolean));
     return;
@@ -1145,10 +1145,9 @@ const fb = (() => {
     stopAll();
     user = u; me = u.uid;
     if (loggedIn() && !myName) setName(u.displayName || (u.email || '').split('@')[0] || '');
-    if (loggedIn()) state.lists.filter(l => l.shared).forEach(l => subscribe(l.id, l.pending ? 'quiet' : false));
+    state.lists.filter(l => l.shared).forEach(l => subscribe(l.id, l.pending ? 'quiet' : false));
     if (loggedIn()) subscribePersonal();
     diff(); repaint(); requestRender();
-    if (loggedIn()) setTimeout(runPendingJoin, 300);
   }
 
   /* ---------- 個人空間（登入後） ---------- */
@@ -1213,15 +1212,8 @@ const fb = (() => {
   function sortLists(){ state.lists.sort((a, b) => (a.shared ? 1 : 0) - (b.shared ? 1 : 0) || (a.pos ?? 1e6) - (b.pos ?? 1e6)); }
 
   /* ---------- 共用列表 ---------- */
-  /* 被移出列表：畫面上拿掉，跟他說一聲 */
-  function removedFrom(lid){
-    const l = listById(lid);
-    if (!l) { unsub(lid); return; }
-    drop(lid);
-    showToast(`你已經不在「${trunc(l.name, 10)}」這個列表了`);
-  }
   function subscribe(lid, joining){
-    if (!on || !loggedIn() || subs.has(lid)) return;
+    if (!on || subs.has(lid)) return;
     const s = { gotList: false, joining: !!joining, quiet: joining === 'quiet' };
     subs.set(lid, s);
     s.un1 = F.onSnapshot(listRef(lid), snap => {
@@ -1235,14 +1227,10 @@ const fb = (() => {
         return;
       }
       const d = snap.data() || {};
-      if (me && d.members && !(me in d.members)){ if (!snap.metadata.hasPendingWrites && !snap.metadata.fromCache) removedFrom(lid); return; }
       let l = listById(lid);
       s.gotList = true; s.joining = false;
       if (!l){ l = { id: lid, shared: true, sections: [] }; state.lists.push(l); }
       l.members = d.members || {};
-      l.owner = d.owner || ''; if (d.invite) l.invite = d.invite; else delete l.invite;
-      // 舊的共用列表沒有擁有者：第一個打開的成員變成擁有者，並產生邀請碼
-      if (!d.owner && me && d.members && me in d.members && !snap.metadata.hasPendingWrites) F.updateDoc(listRef(lid), { owner: me, invite: strongId() }).catch(() => {});
       const j = stripL(d), key = 'l:' + lid, path = 'lists/' + lid;
       const sv = synced.get(key);
       if (l.pending || (!snap.metadata.hasPendingWrites && !(sv && sv.j === j))){
@@ -1250,16 +1238,10 @@ const fb = (() => {
         Object.assign(l, { name: d.name || '未命名', color: d.color || 'blue', icon: d.icon || 'list', numbered: !!d.numbered, sections: Array.isArray(d.sections) ? d.sections : [], shared: true });
         delete l.pending;
       }
-      if (me && myName && l.members[me] !== myName) F.updateDoc(listRef(lid), { ['members.' + me]: myName }).catch(onWriteErr);
+      if (me && myName && l.members[me] !== myName) F.setDoc(listRef(lid), { members: { [me]: myName } }, { merge: true }).catch(onWriteErr);
       markJoined(lid);
       lsSet(state); requestRender(); repaint();
-    }, e => {
-      console.warn(e);
-      const denied = e && /permission/i.test(e.code || '');
-      if (s.joining){ drop(lid); if (!s.quiet) showToast('打不開這個邀請，請確認網路或連結'); }
-      else if (denied) removedFrom(lid);
-      else unsub(lid);
-    });
+    }, e => { console.warn(e); if (s.joining){ drop(lid); if (!s.quiet) showToast('打不開這個邀請，請確認網路或連結'); } });
     s.un2 = F.onSnapshot(F.collection(db, 'lists', lid, 'items'), snap => {
       let ch = false;
       snap.docChanges().forEach(c => {
@@ -1311,14 +1293,14 @@ const fb = (() => {
 
   /* ---------- 找出跟雲端不一樣的那幾筆，只寫那幾筆 ---------- */
   function pathL(l){
-    if (l.pending || l.creating) return null;
-    if (l.shared) return loggedIn() ? 'lists/' + l.id : null;
+    if (l.pending) return null;
+    if (l.shared) return 'lists/' + l.id;
     if (loggedIn() && personalReady) return `users/${me}/lists/${l.id}`;
     return null;
   }
   function pathI(it){
     const l = listById(it.listId); if (!l) return null;
-    if (l.shared) return (l.pending || l.creating || !loggedIn()) ? null : `lists/${l.id}/items/${it.id}`;
+    if (l.shared) return l.pending ? null : `lists/${l.id}/items/${it.id}`;
     if (loggedIn() && personalReady) return `users/${me}/items/${it.id}`;
     return null;
   }
@@ -1327,8 +1309,8 @@ const fb = (() => {
     const now = Date.now(), seen = new Set();
     state.lists.forEach((l, i) => {
       const k = 'l:' + l.id;
-      if (l.shared && !subs.has(l.id) && !l.creating) subscribe(l.id, l.pending ? 'quiet' : false);
-      if (l.pending || l.creating){ seen.add(k); return; }
+      if (l.shared && !subs.has(l.id)) subscribe(l.id, l.pending ? 'quiet' : false);
+      if (l.pending){ seen.add(k); return; }
       const path = pathL(l); if (!path) return;
       seen.add(k);
       const j = l.shared ? stripL(l) : stripL(l) + ':' + i;
@@ -1337,18 +1319,14 @@ const fb = (() => {
       if (!sv || sv.path !== path || sv.j !== j){
         synced.set(k, { path, j });
         const d = { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], numbered: !!l.numbered, u: now, by: me };
-        if (l.shared){
-          if (myName) d.members = { [me]: myName };
-          if (l.owner === me && l.invite){ d.owner = me; d.invite = l.invite; }   // 擁有者按「復原」把整個列表救回來時用
-          F.setDoc(D(path), d, { merge: true }).catch(onWriteErr);
-        }
+        if (l.shared){ if (myName) d.members = { [me]: myName }; F.setDoc(D(path), d, { merge: true }).catch(onWriteErr); }
         else { d.pos = i; l.pos = i; F.setDoc(D(path), d).catch(onWriteErr); }
       }
       if (l.shared) markJoined(l.id);
     });
     state.items.forEach(it => {
       const k = 'i:' + it.id, l = listById(it.listId);
-      if (l && (l.pending || l.creating)){ seen.add(k); return; }
+      if (l && l.pending){ seen.add(k); return; }
       const path = pathI(it); if (!path) return;
       seen.add(k);
       const d = itemData(it), j = stripI(d), sv = synced.get(k);
@@ -1359,9 +1337,8 @@ const fb = (() => {
         F.setDoc(D(path), { ...d, u: now, by: me }).catch(onWriteErr);
       }
     });
-    // 先刪提醒事項、再刪列表（列表先刪掉的話，就沒辦法確認成員身分了）
-    const gone = [...synced].filter(([k]) => !seen.has(k)).sort((a, b) => (a[0][0] === 'l') - (b[0][0] === 'l'));
-    for (const [k, v] of gone){
+    for (const [k, v] of [...synced]){
+      if (seen.has(k)) continue;
       synced.delete(k);
       if (k.startsWith('l:') && v.path.startsWith('lists/')){ unsub(k.slice(2)); unmarkJoined(k.slice(2)); }
       F.deleteDoc(D(v.path)).catch(onWriteErr);
@@ -1372,69 +1349,27 @@ const fb = (() => {
 
   /* ---------- 邀請、加入、離開 ---------- */
   function strongId(){ const a = new Uint8Array(15); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 56]).join('').slice(0, 20); }
-  function linkFor(lid){ const l = listById(lid); return location.origin + location.pathname + '#join-' + lid + (l && l.invite ? '.' + l.invite : ''); }
-  /* 把自己的列表變成共用：換一個猜不到的編號，先建立列表（擁有者＝自己、成員＝自己、邀請碼），再把提醒事項傳上去 */
-  async function share(lid){
+  function linkFor(lid){ return location.origin + location.pathname + '#join-' + lid; }
+  function share(lid){
     const l = listById(lid); if (!l) return null;
-    if (l.shared) return l.id;
-    const nid = strongId(), old = l.id, inv = strongId();
-    const prev = { id: old, pos: l.pos };
-    l.id = nid; l.shared = true; l.creating = true; delete l.pos;
-    l.owner = me; l.invite = inv; l.members = { [me]: myName || '我' };
-    state.items.forEach(i => { if (i.listId === old) i.listId = nid; });
-    if (state.showDone[old] !== undefined){ state.showDone[nid] = state.showDone[old]; delete state.showDone[old]; }
-    if (route.name === 'list' && route.id === old) route = { name: 'list', id: nid };
-    commit();
-    try {
-      await F.setDoc(listRef(nid), { name: l.name, color: l.color || 'blue', icon: l.icon || 'list', sections: l.sections || [], numbered: !!l.numbered,
-        owner: me, invite: inv, members: { [me]: myName || '我' }, u: Date.now(), by: me });
-      synced.set('l:' + nid, { path: 'lists/' + nid, j: stripL(l) });
-      delete l.creating;
+    if (!l.shared){
+      // 換一個很長、猜不到的編號再上傳
+      const nid = strongId(), old = l.id;
+      l.id = nid; l.shared = true; delete l.pos;
+      state.items.forEach(i => { if (i.listId === old) i.listId = nid; });
+      if (state.showDone[old] !== undefined){ state.showDone[nid] = state.showDone[old]; delete state.showDone[old]; }
+      if (route.name === 'list' && route.id === old) route = { name: 'list', id: nid };
       commit();
-      setTimeout(uploadPending, 300);
-      return nid;
-    } catch (e){
-      console.warn(e);
-      // 失敗就改回自己的列表
-      l.id = prev.id; l.shared = false; delete l.creating; delete l.owner; delete l.invite; delete l.members; if (prev.pos != null) l.pos = prev.pos;
-      state.items.forEach(i => { if (i.listId === nid) i.listId = prev.id; });
-      if (route.name === 'list' && route.id === nid) route = { name: 'list', id: prev.id };
-      commit();
-      showToast('沒辦法建立共用列表，請確認網路和 Firebase 規則');
-      return null;
+      setTimeout(uploadPending, 800);
     }
+    return l.id;
   }
-  async function join(lid, tok){
+  function join(lid){
     if (listById(lid)){ route = { name: 'list', id: lid }; render(); return; }
-    state.lists.push({ id: lid, name: '加入中…', color: 'blue', icon: 'list', sections: [], shared: true, pending: true });
+    state.lists.push({ id: lid, name: '載入中…', color: 'blue', icon: 'list', sections: [], shared: true, pending: true });
     route = { name: 'list', id: lid }; selectMode = null;
     lsSet(state); render(); scrollTo(0, 0);
-    try {
-      // 用邀請碼把自己加進成員名單（邀請碼不對、被換掉了，伺服器就會拒絕）
-      await F.updateDoc(listRef(lid), { ['members.' + me]: myName || '成員', joinToken: tok || '' });
-      subscribe(lid, true);
-    } catch (e){
-      console.warn(e);
-      drop(lid);
-      showToast('這個邀請連結已經失效了，請跟對方要新的連結');
-    }
-  }
-  async function removeMember(lid, uid){
-    const l = listById(lid); if (!l || l.owner !== me || uid === me) return false;
-    try { await F.updateDoc(listRef(lid), { ['members.' + uid]: F.deleteField() }); if (l.members) delete l.members[uid]; lsSet(state); return true; }
-    catch (e){ onWriteErr(e); showToast('移不出去，請確認網路'); return false; }
-  }
-  async function rotateInvite(lid){
-    const l = listById(lid); if (!l || l.owner !== me) return false;
-    const inv = strongId();
-    try { await F.updateDoc(listRef(lid), { invite: inv }); l.invite = inv; lsSet(state); return true; }
-    catch (e){ onWriteErr(e); showToast('換不了，請確認網路'); return false; }
-  }
-  let pendingJoin = null;
-  function runPendingJoin(){
-    if (!pendingJoin || !loggedIn()) return;
-    const pj = pendingJoin; pendingJoin = null;
-    if (!myName) askName(() => join(pj.lid, pj.tok), '加入共用列表'); else join(pj.lid, pj.tok);
+    subscribe(lid, true);
   }
   function joinQuiet(lid){
     if (listById(lid)) return;
@@ -1442,24 +1377,22 @@ const fb = (() => {
     subscribe(lid, 'quiet');
   }
   function handleHash(){
-    const m = location.hash.match(/^#join-([A-Za-z0-9]{8,40})(?:\.([A-Za-z0-9]{8,40}))?$/);
+    const m = location.hash.match(/^#join-([A-Za-z0-9]{8,40})$/);
     if (!m) return;
     try { history.replaceState(null, '', location.pathname + location.search); } catch {}
     if (!on){ showToast(failed ? '連不上雲端，請稍後再開一次連結' : '共用功能還沒設定好'); return; }
-    if (!m[2]){ showToast('這是舊的邀請連結，請跟對方要新的連結'); return; }
-    pendingJoin = { lid: m[1], tok: m[2] };
-    if (!loggedIn()){ openLogin('login', '要先登入，才能加入別人的共用列表。登入後會自動加入。'); return; }
-    runPendingJoin();
+    const lid = m[1];
+    if (!myName) askName(() => join(lid), '加入共用列表'); else join(lid);
   }
   function leave(lid){
     const l = listById(lid);
-    if (on && me) F.updateDoc(listRef(lid), { ['members.' + me]: F.deleteField() }).catch(() => {});
+    if (on && me) F.setDoc(listRef(lid), { members: { [me]: F.deleteField() } }, { merge: true }).catch(() => {});
     drop(lid);
     showToast(`已離開「${trunc(l ? l.name : '列表', 10)}」`);
   }
   function setName(n){
     myName = n; try { localStorage.setItem('yige-name', n); } catch {}
-    if (on && me && loggedIn()) state.lists.filter(l => l.shared && !l.pending && !l.creating).forEach(l => F.updateDoc(listRef(l.id), { ['members.' + me]: n }).catch(onWriteErr));
+    if (on && me) state.lists.filter(l => l.shared && !l.pending).forEach(l => F.setDoc(listRef(l.id), { members: { [me]: n } }, { merge: true }).catch(onWriteErr));
   }
   function nameOf(id, lid){
     if (!id) return '';
@@ -1517,9 +1450,7 @@ const fb = (() => {
       user = u;
       if (!myName) setName(u.displayName || (u.email || '').split('@')[0] || '');
       if (!psubs.length && loggedIn()) subscribePersonal();
-      if (loggedIn()) state.lists.filter(l => l.shared).forEach(l => subscribe(l.id, l.pending ? 'quiet' : false));
       diff(); repaint(); render();
-      setTimeout(runPendingJoin, 300);
     }
   }
   async function logout(){
@@ -1559,7 +1490,7 @@ const fb = (() => {
       if (changed){ save(); }
     } finally { uploading = false; }
   }
-  return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf, removeMember, rotateInvite, imagePath, putImage, getImage, delImage, uploadPending,
+  return { init, schedule: diff, flush, share, leave, linkFor, setName, nameOf, imagePath, putImage, getImage, delImage, uploadPending,
     loginGoogle, loginEmail, signupEmail, resetPw, logout, errMsg,
     get on(){ return on; }, get failed(){ return failed; }, get me(){ return me; }, get myName(){ return myName; },
     get configured(){ return !IN_CLAUDE && !!FIREBASE_CONFIG; }, get loggedIn(){ return loggedIn(); },
@@ -1582,61 +1513,29 @@ function askName(then, title = '你的名字'){
     onRight: () => { const n = inp.value.trim(); if (!n) return false; fb.setName(n); setTimeout(() => then && then(), 350); } });
   try { inp.focus({ preventScroll: true }); } catch {}
 }
-async function openInvite(lid){
+function openInvite(lid){
   if (!fb.configured){ openSheet({ title: '邀請一起記', left: '', right: '完成', body: h('p', { class: 'cfm' }, '共用功能還沒設定好（缺 Firebase 設定碼）。') }); return; }
   if (!fb.on){ showToast(fb.failed ? '連不上共用伺服器，請確認網路後重新打開' : '正在連線，請稍等一下再按'); return; }
-  if (!fb.loggedIn){ openLogin('login', '要先登入，才能和別人一起記（這樣只有你邀請的人看得到）。'); return; }
   if (!fb.myName){ askName(() => openInvite(lid)); return; }
-  const l0 = listById(lid);
-  if (l0 && !l0.shared) showToast('建立共用列表中…');
-  const id = await fb.share(lid); if (!id) return;
-  const l = listById(id); if (!l) return;
-  const isOwner = l.owner === fb.me;
-  const I = (icon, label, fn, cls = '') => h('li', {}, h('button', { class: cls, html: icon + `<span>${label}</span>`, onclick: fn }));
-  const body = h('div', {});
-  const paint = () => {
-    body.textContent = '';
-    const cur = listById(id); if (!cur){ closeSheet(); return; }
-    const link = fb.linkFor(id);
-    const msg = `一起用「一格記事」記「${cur.name}」：\n${link}`;
-    const shareItems = [
-      I(UI.copy, '複製邀請連結', () => { closeSheet(); doCopy(msg, '邀請連結'); }),
-      h('li', {}, h('a', { href: 'https://line.me/R/share?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener', style: { display: 'flex', alignItems: 'center', gap: '12px', minHeight: '48px', padding: '0 14px', color: 'inherit', textDecoration: 'none', borderBottom: '.5px solid var(--sep)' } },
-        h('span', { style: { width: '20px', height: '20px', borderRadius: '5px', background: '#06C755', color: '#fff', fontSize: '9px', fontWeight: 800, display: 'grid', placeItems: 'center' } }, 'LINE'), h('span', {}, '用 LINE 傳送'))),
-    ];
-    if (navigator.share) shareItems.push(I(UI.dup.replace('M14.5 12v5M12 14.5h5', ''), '其他方式分享', () => { navigator.share({ title: '一格記事', text: msg }).catch(() => {}); }));
-    if (isOwner) shareItems.push(I('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4"/></svg>', '換一個新的邀請連結（舊的會失效）', () => confirmRotate()));
-    const mem = Object.entries(cur.members || {});
-    const memList = h('ul', { class: 'menu' }, ...mem.map(([uid, nm]) => h('li', {}, h('div', { class: 'memrow' },
-      h('span', { class: 'memav' }, (nm || '?').slice(0, 1)),
-      h('span', { class: 'memnm' }, (nm || '某人') + (uid === fb.me ? '（你）' : '') + (uid === cur.owner ? ' · 建立的人' : '')),
-      isOwner && uid !== fb.me ? h('button', { class: 'memkick', onclick: () => confirmKick(uid, nm) }, '移出') : null))));
-    body.append(
-      h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 12px' } }, isOwner
-        ? `把連結傳給要一起記的人，對方登入後打開就會加入「${cur.name}」。`
-        : `你是「${cur.name}」的成員。可以把連結傳給別人，建立的人可以隨時把連結換掉。`),
-      h('div', { class: 'fgroup', style: { padding: '12px 14px', fontSize: '14px', wordBreak: 'break-all', userSelect: 'text', WebkitUserSelect: 'text', color: 'var(--blue)' } }, link),
-      h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...shareItems)),
-      h('div', { class: 'dhead', style: { margin: '0 4px 8px' } }, `成員（${mem.length} 人）`),
-      h('div', { class: 'fgroup' }, memList),
-      h('p', { class: 'cfm', style: { textAlign: 'left', margin: '4px 4px 0', fontSize: '13px' } }, isOwner
-        ? '只有成員看得到這個列表。連結不小心傳錯人，按「換一個新的邀請連結」，舊連結就不能用了，已經在裡面的人不受影響。'
-        : '只有成員看得到這個列表。'));
-  };
-  const confirmRotate = () => {
-    openSheet({ title: '換新的邀請連結？', left: '', right: '', body: h('div', {},
-      h('p', { class: 'cfm' }, '舊的連結會馬上失效，還沒加入的人要用新的連結。已經在列表裡的人不受影響。'),
-      h('button', { class: 'bigbtn', style: { color: 'var(--blue)' }, onclick: async () => { const ok = await fb.rotateInvite(id); closeSheet(); if (ok){ showToast('已換成新的邀請連結'); setTimeout(() => openInvite(id), 350); } } }, '換新的連結'),
-      h('button', { class: 'bigbtn', onclick: () => { closeSheet(); setTimeout(() => openInvite(id), 350); } }, '取消')) });
-  };
-  const confirmKick = (uid, nm) => {
-    openSheet({ title: `把「${nm || '這個人'}」移出？`, left: '', right: '', body: h('div', {},
-      h('p', { class: 'cfm' }, '對方會馬上看不到這個列表。如果你也不想讓他用舊連結再加入，記得再按「換一個新的邀請連結」。'),
-      h('button', { class: 'bigbtn red', onclick: async () => { const ok = await fb.removeMember(id, uid); closeSheet(); if (ok){ showToast(`已把「${trunc(nm || '對方', 8)}」移出`); setTimeout(() => openInvite(id), 350); } } }, '移出'),
-      h('button', { class: 'bigbtn', onclick: () => { closeSheet(); setTimeout(() => openInvite(id), 350); } }, '取消')) });
-  };
-  paint();
-  openSheet({ title: isOwner ? '邀請／成員' : '成員', left: '', right: '完成', body });
+  const id = fb.share(lid); if (!id) return;
+  const l = listById(id);
+  const link = fb.linkFor(id);
+  const msg = `一起用「一格記事」記「${l.name}」：\n${link}`;
+  const box = h('div', { class: 'fgroup', style: { padding: '12px 14px', fontSize: '14px', wordBreak: 'break-all', userSelect: 'text', WebkitUserSelect: 'text', color: 'var(--blue)' } }, link);
+  const members = Object.entries(l.members || {}).map(([uid, nm]) => nm + (uid === fb.me ? '（你）' : ''));
+  const I = (icon, label, fn) => h('li', {}, h('button', { html: icon + `<span>${label}</span>`, onclick: fn }));
+  const items = [
+    I(UI.copy, '複製邀請連結', () => { closeSheet(); doCopy(msg, '邀請連結'); }),
+    h('li', {}, h('a', { href: 'https://line.me/R/share?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener', style: { display: 'flex', alignItems: 'center', gap: '12px', minHeight: '48px', padding: '0 14px', color: 'inherit', textDecoration: 'none', borderBottom: '.5px solid var(--sep)' } },
+      h('span', { style: { width: '20px', height: '20px', borderRadius: '5px', background: '#06C755', color: '#fff', fontSize: '9px', fontWeight: 800, display: 'grid', placeItems: 'center' } }, 'LINE'), h('span', {}, '用 LINE 傳送'))),
+  ];
+  if (navigator.share) items.push(I(UI.dup.replace('M14.5 12v5M12 14.5h5', ''), '其他方式分享', () => { navigator.share({ title: '一格記事', text: msg }).catch(() => {}); }));
+  openSheet({ title: '邀請一起記', left: '', right: '完成', body: h('div', {},
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px 12px' } }, `把連結傳給要一起記的人，對方打開就會加入「${l.name}」。之後任何一邊新增、修改、打勾、刪除，另一邊都會同步。`),
+    box,
+    h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)),
+    members.length ? h('p', { class: 'cfm', style: { textAlign: 'left', margin: '0 4px', fontSize: '14px' } }, '目前成員：' + members.join('、')) : null,
+    h('p', { class: 'cfm', style: { textAlign: 'left', margin: '8px 4px 0', fontSize: '13px' } }, '拿到這個連結的人都能看到並修改這個列表，只傳給你要一起記的人。')) });
 }
 
 function applyPendingRemote(){ cloud.flush(); fb.flush(); }
@@ -3452,12 +3351,9 @@ function openListMenu(vm){
   if (route.name === 'list' && fb.configured){
     const L = listById(route.id);
     items.unshift(I(UI.person, L.shared ? '邀請／成員' : '邀請別人一起記', later(() => openInvite(route.id))));
-    if (L.shared && L.owner !== fb.me) items.push(I(UI.back.replace('style="width:12px;height:20px"', 'style="width:20px;height:20px"'), '離開這個共用列表', later(() => confirmLeave(route.id)), 'red'));
+    if (L.shared) items.push(I(UI.back.replace('style="width:12px;height:20px"', 'style="width:20px;height:20px"'), '離開這個共用列表', later(() => confirmLeave(route.id)), 'red'));
   }
-  if (route.name === 'list'){
-    const L = listById(route.id);
-    if (!L.shared || L.owner === fb.me) items.push(I(UI.trash, L.shared ? '刪除列表（所有人）' : '刪除列表', later(confirmDeleteList), 'red'));
-  }
+  if (route.name === 'list') items.push(I(UI.trash, listById(route.id).shared ? '刪除列表（所有人）' : '刪除列表', later(confirmDeleteList), 'red'));
   openSheet({ title: vm.title, left: '', right: '完成', body: h('div', { class: 'fgroup' }, h('ul', { class: 'menu' }, ...items)) });
 }
 /* ---------- 分類 ---------- */
